@@ -1,0 +1,1380 @@
+#+TITLE: Emacs Configuration
+#+AUTHOR: Phillip B Oldham
+
+* Introduction
+
+This is the Emacs environment I (Phillip B Oldham, Oldham-Made) use for
+development. This file is a literate programming document written with org-mode
+and org-mode-babel. You can view config.html in a web browser, or read config.org in
+Emacs.
+
+I generally only use Emacs on OS X, so there is a lot of customization around that OS.
+
+Inspiration has been taking from the following sources:
+
+- http://www.wilfred.me.uk/.emacs.d/init.org
+- http://dl.dropboxusercontent.com/u/3968124/sacha-emacs.html
+- https://github.com/jhenahan/emacs.d/blob/master/init.org
+
+** Generation and Usage
+
+=config.org= is the source file containing my preferences and settings. =config.el= and
+=config.html= are generated from it.
+
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+  ;; (setq debug-on-error t)
+  (require 'cl)
+  (require 'org)
+  (defun export-init-org ()
+    "Generate init.html and init.html from the current init.org file."
+    (interactive)
+    (call-interactively 'org-babel-tangle)
+    (call-interactively 'org-export-as-html)
+    (call-interactively 'org-md-export-to-markdown))
+#+END_SRC
+
+** Licensing
+
+Code I've written (this org file, init.el, and other files in this repository)
+is MIT licensed.
+
+* Contents
+** Performance
+
+First-off, lets do some performance tweaks to keep things ticking along
+nicely.
+
+Emacs will run garbage collection after `gc-cons-threshold' bytes of
+consing. The default value is 800,000 bytes, or ~ 0.7 MiB. By
+increasing to 100 MiB we reduce the number of pauses due to
+garbage collection during setup. I'll return this to the default
+after setup.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+  (setq gc-cons-threshold 100000000)
+#+END_SRC
+
+Let's add some timestamps to the messages so we can see whether anything
+is causing emacs to block for a significant amount of time.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+;;; timestamps in *Messages*
+(defun current-time-microseconds ()
+  (let* ((nowtime (current-time))
+         (now-ms (nth 2 nowtime)))
+    (concat (format-time-string "[%Y-%m-%dT%T" nowtime) (format ".%d] " now-ms))))
+
+(defadvice message (before test-symbol activate)
+  (if (not (string-equal (ad-get-arg 0) "%s%s"))
+      (let ((deactivate-mark nil)
+            (inhibit-read-only t))
+        (save-excursion
+          (set-buffer "*Messages*")
+          (goto-char (point-max))
+          (if (not (bolp))
+              (newline))
+          (insert (current-time-microseconds))))))
+#+END_SRC
+
+** Startup Tweaks
+
+Stop the start screen from displaying
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq inhibit-startup-message t)
+#+END_SRC
+
+Hide the unused toolbar
+#+BEGIN_SRC emacs-lisp :tangle yes
+(when (fboundp 'tool-bar-mode)
+  (tool-bar-mode -1))
+#+END_SRC
+
+Hide scrollbars
+#+BEGIN_SRC emacs-lisp :tangle yes
+(when (fboundp 'scroll-bar-mode)
+  (scroll-bar-mode -1))
+#+END_SRC
+
+Kill the annoying bell
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq visible-bell t)
+#+END_SRC
+
+Disable the cursor blink
+#+BEGIN_SRC emacs-lisp :tangle yes
+(blink-cursor-mode -1)
+#+END_SRC
+
+Don't insert instructions in the *scratch* buffer
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq initial-scratch-message nil)
+#+END_SRC
+
+Allow answering 'Yes or No' prompts with Y or N
+#+BEGIN_SRC emacs-lisp :tangle yes
+(fset 'yes-or-no-p 'y-or-n-p)
+#+END_SRC
+
+Reduce the message log to 512 entries
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq message-log-max 512)
+#+END_SRC
+
+** Package Management
+*** Sources
+
+I use ELPA packages heavily for functionality, primarily the MELPA and Marmalade
+repositories. Initalize all the package repos here, so we can use them later.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(require 'package)
+(add-to-list 'package-archives '("melpa" . "https://melpa.milkbox.net/packages/") t)
+(add-to-list 'package-archives '("marmalade" . "https://marmalade-repo.org/packages/") t)
+(add-to-list 'package-archives '("gnu" . "https://elpa.gnu.org/packages/") t)
+(package-initialize)
+#+END_SRC
+
+Update the local package database if needed before installing packages
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defadvice package-install (before maybe-refresh-packages activate)
+  (unless (or (called-interactively-p) (assq (ad-get-arg 0) package-archive-contents))
+    (unless package--initialized
+      (package-initialize t))
+    (unless (and package-archive-contents (assq (ad-get-arg 0) package-archive-contents))
+      (package-refresh-contents))))
+#+END_SRC
+
+*** =req-package=
+
+=req-package= is a macro wrapper on top of use-package. It's goal is to simplify
+package dependencies management.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(unless (package-installed-p 'req-package)
+  (package-install 'req-package))
+(package-initialize)
+(require 'req-package)
+#+END_SRC
+
+And now we get diminish to augment req-package.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package diminish)
+#+END_SRC
+
+Keep packages up to date.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package auto-package-update
+             :init (auto-package-update-maybe))
+#+END_SRC
+
+** Basic Settings
+
+Some very basic settings for my environment
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq user-full-name "Phillip B Oldham"
+      change-log-default-name "CHANGELOG")
+#+END_SRC
+
+** Interface
+*** Theme
+
+I prefer a smaller font, to get more text onto the screen.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(set-face-attribute 'default nil :font "Meslo LG L DZ for Powerline:pixelsize=10:weight=normal:slant=normal:width=normal:spacing=100:scalable=true")
+#+END_SRC
+
+I prefer darker themes as they're easier on my eyes, so I created one:
+https://github.com/OldhamMade/leiptr-theme
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(add-to-list 'custom-theme-load-path (expand-file-name "themes/leiptr" dotfiles-dir))
+(load-theme 'leiptr t)
+#+END_SRC
+
+*** Line Numbers
+Turn line-numbers on everywhere.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package hlinum
+             :init
+             (progn
+               (global-linum-mode 1)
+               (setq linum-format "%4d\u2595")
+               (setq column-number-mode 1)
+               (hlinum-activate)
+               ))
+#+END_SRC
+
+Allow clicking the line-numbers to select the line(s)
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun line-at-click ()
+  (save-excursion
+  (let ((click-y (cdr (cdr (mouse-position))))
+      (line-move-visual-store line-move-visual))
+    (setq line-move-visual t)
+    (goto-char (window-start))
+    (next-line (1- click-y))
+    (setq line-move-visual line-move-visual-store)
+    (1+ (line-number-at-pos)))))
+
+(defun md-select-linum ()
+  (interactive)
+  (goto-line (line-at-click))
+  (set-mark (point))
+  (setq *linum-mdown-line*
+    (line-number-at-pos)))
+
+(defun mu-select-linum ()
+  (interactive)
+  (when *linum-mdown-line*
+  (let (mu-line)
+    (setq mu-line (line-at-click))
+    (goto-line (max *linum-mdown-line* mu-line))
+    (set-mark (line-end-position))
+    (goto-line (min *linum-mdown-line* mu-line))
+    (setq *linum-mdown*
+      nil))))
+
+(global-set-key (kbd "<left-margin> <down-mouse-1>") 'md-select-linum)
+(global-set-key (kbd "<left-margin> <mouse-1>") 'mu-select-linum)
+(global-set-key (kbd "<left-margin> <S-mouse-1>") 'mu-select-linum)
+(global-set-key (kbd "<left-margin> <drag-mouse-1>") 'mu-select-linum)
+#+END_SRC
+
+*** Seeing changes when working with Git
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package git-gutter-fringe+
+             :init
+             (progn
+               (require 'git-gutter-fringe+)
+               (global-git-gutter+-mode)
+               (git-gutter-fr+-minimal)
+               (setq-default left-fringe-width  16)
+               (setq-default right-fringe-width 16)
+               (eval-after-load "git-gutter+" '(diminish 'git-gutter+-mode))
+               ))
+#+END_SRC
+
+*** Recursive Editing
+
+We can make the minibuffer much more useful by enabling recursive
+usage. This means that when the minibuffer is active we can still call
+commands that require the minibuffer.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+  (setq enable-recursive-minibuffers t)
+#+END_SRC
+
+It's easy to lose track of whether we're in a recursive minibuffer or
+not. We display the recursion level in the minibuffer to avoid confusion.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+  (minibuffer-depth-indicate-mode 1)
+#+END_SRC
+
+*** Uniquify buffer names
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package uniquify
+             :init
+             (progn
+                (setq uniquify-buffer-name-style 'forward)
+                ))
+#+END_SRC
+
+*** Modeline
+I prefer the cleaner Powerline to the usual modeline.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package powerline
+             :init (powerline-default-theme))
+#+END_SRC
+
+Reduce the amount of rubbish in the modeline...
+
+#+BEGIN_SRC emacs-lisp
+(add-hook 'emacs-lisp-mode-hook
+  (lambda()
+    (setq mode-name "el")))
+#+END_SRC
+
+*** Find convenient unbound keystrokes
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package unbound)
+#+END_SRC
+
+** Key bindings
+*** Mac
+Set Option as Meta, and add Cmd as "Hyper"
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq mac-command-modifier 'alt mac-option-modifier 'meta)
+(setq mac-command-modifier 'hyper)
+#+END_SRC
+
+Undo/redo
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-set-key [(hyper z)] 'undo)
+(global-set-key [(hyper shift z)] 'redo)
+#+END_SRC
+
+Select all
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-set-key [(hyper a)] 'mark-whole-buffer)
+#+END_SRC
+
+Cut/copy/paste
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-set-key [(hyper x)] 'kill-region)
+(global-set-key [(hyper c)] 'kill-ring-save)
+(global-set-key [(hyper v)] 'yank)
+#+END_SRC
+
+Open/save/close/quit
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-set-key [(hyper o)] 'find-file)
+(global-set-key [(hyper s)] 'save-buffer)
+(global-set-key [(hyper w)]
+                (lambda () (interactive) (my-kill-buffer (current-buffer))))
+(global-set-key [(hyper q)] 'save-buffers-kill-emacs)
+#+END_SRC
+
+Minimise/hide
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-set-key [(hyper m)] 'iconify-frame)
+(global-set-key [(hyper h)] 'ns-do-hide-emacs)
+#+END_SRC
+
+Search
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-set-key [(hyper f)] 'isearch-forward)
+(global-set-key [(hyper g)] 'isearch-repeat-forward)
+#+END_SRC
+
+Moving the cursor
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-set-key [(hyper left)] 'beginning-of-line)
+(global-set-key [(hyper right)] 'end-of-line)
+(global-set-key [(hyper t)] 'beginning-of-buffer)
+(global-set-key [(hyper b)] 'end-of-buffer)
+#+END_SRC
+
+Changing case
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-set-key [(hyper u)] 'upcase-region)
+(global-set-key [(hyper l)] 'downcase-region)
+#+END_SRC
+
+Goto line
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-set-key [(hyper j)] 'goto-line)
+#+END_SRC
+
+Remove the space in a selection to join lines
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-set-key (kbd "H-S-<backspace>") 'join-line)
+#+END_SRC
+
+Repeat the last command
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-set-key [(hyper shift r)] 'repeat)
+#+END_SRC
+
+Use the Escape key to escape the keyboard
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(define-key local-function-key-map [cancel] [H-Esc])
+(global-set-key (kbd "<escape>") 'keyboard-escape-quit)
+#+END_SRC
+
+Allow euro to be entered
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-set-key (kbd "M-2") '(lambda () (interactive) (insert "€")))
+#+END_SRC
+
+Allow hash to be entered
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-set-key (kbd "M-3") '(lambda () (interactive) (insert "#")))
+#+END_SRC
+
+Text resizing
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-set-key (kbd "H-=") 'text-scale-increase)
+(global-set-key (kbd "H--") 'text-scale-decrease)
+#+END_SRC
+
+*** Key chords
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package key-chord
+             :init
+             (progn
+               (key-chord-mode 1)
+               (when (memq window-system '(mac ns))
+                 (key-chord-define-global "§1" 'smex))
+               (key-chord-define-global "o0" 'find-file)
+               (key-chord-define-global "o=" 'dired-jump)
+               (key-chord-define-global "o-" 'ido-recentf-open)
+               (key-chord-define-global "o[" 'find-file-at-point)
+               (key-chord-define-global "p-" 'projectile-find-file)
+               (key-chord-define-global "t5" 'untabify)
+               (key-chord-define-global "r4" 'replace-string)
+               (key-chord-define-global "r3" 'vr/query-replace)
+               (key-chord-define-global "e3" 'er/expand-region)
+               (key-chord-define-global "e2" 'er/contract-region)
+               (key-chord-define-global "p[" 'fill-paragraph)
+               (key-chord-define-global "p]" 'unfill-paragraph)
+               (key-chord-define-global " k" 'delete-trailing-whitespace)
+               (key-chord-define-global "m," 'my-previous-like-this)
+               (key-chord-define-global "m." 'my-more-like-this)
+               (key-chord-define-global "s1" 'ispell-region)
+               (key-chord-define-global "d3" 'deft)
+               ))
+#+END_SRC
+
+*** Hydra
+Hydra is a package that can be used to tie related commands 
+into a family of short bindings with a common prefix.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package 'hydra)
+(req-package-eval 'hydra)
+#+END_SRC
+
+** Auto-completion (Company mode)
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package company-quickhelp
+             :requires (company-mode company-jedi)
+             :defer t
+             :init
+             (progn
+               (global-company-mode 1)
+               (company-quickhelp-mode 1)
+               (setq company-idle-delay 0.2)
+               (define-key company-mode-map "\t" 'company-complete-common)
+               ))
+#+END_SRC
+
+** Highlighting
+*** Highlight syntax
+
+Turn syntax highlighting on by default
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-font-lock-mode 1)
+#+END_SRC
+
+*** Highlight indentation
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package highlight-indentation
+			 :config (set-face-background 'highlight-indentation-face "#222")
+             :init
+             (progn
+               (add-hook 'python-mode-hook 'highlight-indentation-mode)
+               (add-hook 'alchemist-mode-hook 'highlight-indentation-mode)
+               ))
+#+END_SRC
+
+*** Highlight delimiters
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package rainbow-delimiters
+             :diminish ""
+             :init
+             (progn
+               (add-hook 'prog-mode-hook 'rainbow-delimiters-mode)
+               ))
+#+END_SRC
+
+*** Highlight variables
+
+Rainbow identifiers subtly changes the look of variables, to make them a little
+easier to visually search
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package rainbow-identifiers
+			 :init (add-hook 'prog-mode-hook 'rainbow-identifiers-mode))
+#+END_SRC
+
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package column-enforce-mode
+			 :diminish column-enforce-mode
+             :init
+             (progn
+               (add-hook 'python-mode-hook 'column-enforce-mode)
+               (add-hook 'alchemist-mode-hook 'column-enforce-mode)
+               ))
+#+END_SRC
+
+*** Highlight colour references with it's colour
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package rainbow-mode
+             :defer t
+             :init
+             (progn
+               (add-hook 'clevercss-mode-hook 'rainbow-mode)
+               (add-hook 'less-mode-hook 'rainbow-mode)
+               (add-hook 'css-mode-hook 'rainbow-mode)
+               (add-hook 'css-mode-hook 'rainbow-mode)
+               (add-hook 'emacs-lisp-mode-hook 'rainbow-mode)
+               ))
+#+END_SRC
+
+** Buffers
+*** Initial buffer major mode: text
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq initial-major-mode 'text-mode)
+#+END_SRC
+
+*** New Empty Buffer
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun new-empty-buffer ()
+  "Create a new buffer called untitled(<n>)"
+  (interactive)
+  (let ((newbuf (generate-new-buffer-name "untitled")))
+    (switch-to-buffer newbuf)))
+
+(global-set-key [(hyper n)] 'new-empty-buffer)
+#+END_SRC
+
+*** Scratch buffer management
+
+Now let's make the *scratch* buffer persistent across sessions
+
+#+BEGIN_SRC  emacs-lisp :tangle yes
+(defvar persistent-scratch-filename
+    (expand-file-name ".emacs-persistent-scratch" dotfiles-dir)
+    "Location of *scratch* file contents for persistent-scratch.")
+
+(defun save-persistent-scratch ()
+  "Write the contents of *scratch* to the file name
+  PERSISTENT-SCRATCH-FILENAME"
+  (with-current-buffer (get-buffer "*scratch*")
+    (write-region (point-min) (point-max)
+                  persistent-scratch-filename)))
+
+(defun load-persistent-scratch ()
+  "Load the contents of PERSISTENT-SCRATCH-FILENAME into the
+  scratch buffer, clearing its contents first."
+  (if (file-exists-p persistent-scratch-filename)
+      (with-current-buffer (get-buffer "*scratch*")
+        (delete-region (point-min) (point-max))
+        (shell-command (format "cat %s" persistent-scratch-filename) (current-buffer)))))
+
+(load-persistent-scratch)
+
+(push #'save-persistent-scratch kill-emacs-hook)
+#+END_SRC
+
+*** Persist certain buffers
+
+Bury certain buffers instead of kill them
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq bury-buffer-names '("*scratch*" "*Messages*"))
+
+(defun kill-buffer-query-functions-maybe-bury ()
+  "Bury certain buffers instead of killing them."
+  (if (member (buffer-name (current-buffer)) bury-buffer-names)
+      (progn
+        (kill-region (point-min) (point-max))
+        (bury-buffer)
+        nil)
+    t))
+
+(add-hook 'kill-buffer-query-functions 'kill-buffer-query-functions-maybe-bury)
+
+(defun my-kill-buffer (buffer)
+  "Protect some special buffers from getting killed."
+  (interactive (list (current-buffer)))
+  (if (member (buffer-name buffer) bury-buffer-names)
+      (call-interactively 'bury-buffer buffer)
+    (kill-buffer buffer)))
+#+END_SRC
+
+*** Kill all buffers except current
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun kill-all-buffers-except-current ()
+  "Kill all buffers except current buffer."
+  (interactive)
+  (let ((current-buf (current-buffer)))
+    (dolist (buffer (buffer-list))
+      (set-buffer buffer)
+      (unless (eq current-buf buffer)
+        (kill-buffer buffer)))))
+#+END_SRC
+
+*** Switching buffers
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun custom-ignore-buffer (str)
+  (or
+   ;;buffers I don't want to switch to
+   (string-match "\\*Buffer List\\*" str)
+   (string-match "\\*Compile-Log\\*" str)
+   (string-match "^TAGS" str)
+   (string-match "^\\*Messages\\*$" str)
+   (string-match "^\\*Completions\\*$" str)
+   (string-match "^\\*Flymake error messages\\*$" str)
+   (string-match "^\\*Flycheck error messages\\*$" str)
+   (string-match "^\\*SPEEDBAR\\*" str)
+   (string-match "^ " str)
+
+   ;;Test to see if the window is visible on an existing visible frame.
+   ;;Because I can always ALT-TAB to that visible frame, I never want to
+   ;;Ctrl-TAB to that buffer in the current frame.  That would cause
+   ;;a duplicate top-level buffer inside two frames.
+   (memq str
+         (mapcar
+          (lambda (x)
+            (buffer-name
+             (window-buffer
+              (frame-selected-window x))))
+          (visible-frame-list)))
+   ))
+
+(defun custom-switch-buffer (ls)
+  "Switch to next buffer in ls skipping unwanted ones."
+  (let* ((ptr ls)
+         bf bn go
+         )
+    (while (and ptr (null go))
+      (setq bf (car ptr)  bn (buffer-name bf))
+      (if (null (custom-ignore-buffer bn))        ;skip over
+   (setq go bf)
+        (setq ptr (cdr ptr))
+        )
+      )
+    (if go
+        (switch-to-buffer go))))
+
+(defun custom-prev-buffer ()
+  "Switch to previous buffer in current window."
+  (interactive)
+  (custom-switch-buffer (reverse (buffer-list))))
+
+(global-set-key [(hyper down)] 'custom-prev-buffer)
+
+(defun custom-next-buffer ()
+  "Switch to the other buffer (2nd in list-buffer) in current window."
+  (interactive)
+  (bury-buffer (current-buffer))
+  (custom-switch-buffer (buffer-list)))
+
+(global-set-key [(hyper up)] 'custom-next-buffer)
+    #+END_SRC
+
+*** Copy buffer path to kill ring
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun copy-full-path-to-kill-ring ()
+  "copy buffer's full path to kill ring"
+  (interactive)
+  (when buffer-file-name
+    (kill-new (file-truename buffer-file-name))))
+#+END_SRC
+
+*** Echo buffer path
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun describe-variable-short (var)
+  (interactive "vVariable: ")
+  (message (format "%s: %s" (symbol-name var) (symbol-value var))) )
+
+(defun get-buffer-path ()
+  "print the buffer path in the mini buffer"
+  (interactive)
+  (when buffer-file-name
+    (kill-new (file-truename buffer-file-name))
+    (message (format "Path: %s (copied to kill-ring)" (file-truename buffer-file-name)))
+    ))
+#+END_SRC
+
+** Files
+*** Copy Filename to Clipboard
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun copy-file-name-to-clipboard ()
+  "Copy the current buffer file name to the clipboard."
+  (interactive)
+  (let ((filename (if (equal major-mode 'dired-mode)
+                      default-directory
+                    (buffer-file-name))))
+    (when filename
+      (kill-new filename)
+      (message "Copied buffer file name '%s' to the clipboard." filename))))
+#+END_SRC
+
+*** Open Filename with External Program
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun open-with ()
+  "Simple function that allows us to open the underlying
+file of a buffer in an external program."
+  (interactive)
+  (when buffer-file-name
+    (shell-command (concat
+                    (if (eq system-type 'darwin)
+                        "open"
+                      (read-shell-command "Open current file with: "))
+                    " "
+                    buffer-file-name))))
+#+END_SRC
+
+*** Rename File and Buffer
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun rename-file-and-buffer ()
+  "Rename the current buffer and file it is visiting."
+  (interactive)
+  (let ((filename (buffer-file-name)))
+    (if (not (and filename (file-exists-p filename)))
+        (message "Buffer is not visiting a file!")
+      (let ((new-name (read-file-name "New name: " filename)))
+        (cond
+         ((vc-backend filename) (vc-rename-file filename new-name))
+         (t
+          (rename-file filename new-name t)
+          (rename-buffer new-name)
+          (set-visited-file-name new-name)
+          (set-buffer-modified-p nil)))))))
+#+END_SRC
+
+*** Move File and Buffer
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun move-buffer-file (dir)
+  "Move both current buffer and file it's visiting to DIR."
+  (interactive "DNew directory: ")
+  (let* ((name (buffer-name))
+         (filename (buffer-file-name))
+         (dir
+          (if (string-match dir "\\(?:/\\|\\\\)$")
+              (substring dir 0 -1) dir))
+         (newname (concat dir "/" name)))
+    (if (not filename)
+        (message "Buffer '%s' is not visiting a file!" name)
+      (copy-file filename newname 1)
+      (delete-file filename)
+      (set-visited-file-name newname)
+      (set-buffer-modified-p nil)
+      t)))
+#+END_SRC
+
+*** Reloading
+Always reload the file on disk when it updates
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-auto-revert-mode 1)
+#+END_SRC
+
+*** Autosaves and Backups
+
+Disable autosaving of files
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq auto-save-default nil)
+#+END_SRC
+
+Stop making backup files
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq make-backup-files nil)
+#+END_SRC
+
+*** Saving
+
+Always append a new line to the file
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq require-final-newline t)
+#+END_SRC
+
+Clean whitespace intelligently on save
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package whitespace-cleanup-mode
+			 :diminish whitespace-cleanup-mode
+             :init (global-whitespace-cleanup-mode))
+#+END_SRC
+
+** Navigation
+*** Minibuffer Shortcuts
+When selecting a file to visit, // will mean /
+and ~ will mean $HOME regardless of preceding text
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq file-name-shadow-tty-properties '(invisible t))
+(file-name-shadow-mode 1)
+#+END_SRC
+
+*** Open recently opened files quickly
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package recentf
+             :init
+             (progn
+               (recentf-mode 1)
+               (setq recentf-max-save-items 500
+                     recentf-max-menu-items 50)
+               (add-to-list 'recentf-exclude "ido\\.last\\'")
+               (recentf-cleanup)
+             ))
+#+END_SRC
+
+*** IDO
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package ido-ubiquitous
+             :require (ido recentf)
+             :init
+             (progn
+               (ido-mode t)
+               (setq ido-confirm-unique-completion nil)
+               (setq ido-create-new-buffer 'always)
+               (setq ido-enable-flex-matching t)
+               (setq ido-ignore-extensions t)
+               (setq ido-use-virtual-buffers t)
+               (ido-ubiquitous-mode 1)
+               ))
+#+END_SRC
+
+Flx is rather useful, so let's add that too
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package flx-ido
+             :require flx
+             :init
+             (progn
+               (flx-ido-mode 1)
+               ))
+#+END_SRC
+
+Use ido for recently open files
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun ido-recentf-open ()
+  "Use `ido-completing-read' to \\[find-file] a recent file"
+  (interactive)
+  (if (find-file (ido-completing-read "Find recent file: " recentf-list))
+      (message "Opening file...")
+    (message "Aborting")))
+
+(global-set-key (kbd "H-S-o") 'ido-recentf-open)
+#+END_SRC
+
+*** Smex
+
+Improve M-x with recent/popular commands at prompt.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package smex
+             :bind (("M-x" . smex)
+                    ("M-X" . smex-major-mode-commands)
+                    ("C-c C-c M-x" . execute-extended-command)))
+#+END_SRC
+
+*** Projectile
+
+Automagically interact with "projects"; git, mercurial, bazaar, and darcs repos
+are seen as projects by default.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package projectile
+             :diminish ""
+             :init
+             (progn
+               (projectile-global-mode)
+               ))
+#+END_SRC
+
+** Moving Around
+*** By indentation
+
+`C-a' normally moves us to the beginning of the line
+unconditionally. This version is more useful, as it moves to the
+first non-whitespace character if we're already at the beginning of
+the line. Repeated use of `C-a' toggles between these two positions.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+  (defun beginning-of-line-dwim ()
+    "Toggles between moving point to the first non-whitespace character, and
+  the start of the line."
+    (interactive)
+    (let ((start-position (point)))
+      (move-beginning-of-line nil)
+      (when (= (point) start-position)
+          (back-to-indentation))))
+
+  (global-set-key (kbd "C-a") 'beginning-of-line-dwim)
+  (global-set-key (kbd "H-<left>") 'beginning-of-line-dwim)
+#+END_SRC
+
+*** By last change
+
+It can be rather handy to jump to the last changed area in a file.
+
+KEYBINDING: "M -"
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package goto-last-change
+             :diminish ""
+             :bind ("H-M-<left>" . goto-last-change))
+#+END_SRC
+
+** Editing
+*** Showing changes
+Highlight changes to the buffer caused by commands such as ‘undo’, ‘yank’/’yank-pop’, etc.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package volatile-highlights
+             :diminish volatile-highlights-mode
+             :config (volatile-highlights-mode t))
+#+END_SRC
+
+*** Tabs
+
+Since I generally develop with languages that adhere to the "off-side" rule
+(eg, Python) always replace tabs with spaces.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq-default indent-tabs-mode nil)
+#+END_SRC
+
+Set tab width to 4 for all buffers
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq-default tab-width 4)
+#+END_SRC
+
+*** Overwriting
+
+When there's an active selection, delete on inserting new text (overwrite)
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(delete-selection-mode +1)
+#+END_SRC
+
+*** Undo
+Standard Emacs undo is kind of confusing. [[http://www.dr-qubit.org/emacs.php#undo-tree][undo-tree]] replaces this with a
+simpler tree structure. It also allows us to visualize the tree directly.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package undo-tree
+             :ensure undo-tree
+             :diminish ""
+             :init (global-undo-tree-mode))
+#+END_SRC
+
+*** CUA
+
+Enable CUA mode for using =C-RET= for working with rectangles.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq cua-enable-cua-keys nil)
+(setq cua-highlight-region-shift-only t)
+(setq cua-toggle-set-mark nil)
+(cua-mode)
+#+END_SRC
+
+Transient-mark-mode needs to be reenabled after enabling CUA-mode
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq transient-mark-mode t)
+#+END_SRC
+
+*** Auto-pair braces
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package autopair
+             :diminish autopair-mode
+             :init
+             (progn
+              (autopair-global-mode)
+              (setq show-paren-delay 0)
+              (show-paren-mode t)
+              (setq show-paren-style 'parenthesis)
+              (add-hook 'term-mode-hook
+                        #'(lambda ()
+                            (setq autopair-dont-activate t)
+                            (autopair-mode -1)))
+              ))
+#+END_SRC
+
+*** Sort lines, case insensitive
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun sort-lines-nocase ()
+  (interactive)
+  (let ((sort-fold-case t))
+    (call-interactively 'sort-lines)))
+#+END_SRC
+
+*** Fix/replace "Smart Quotes"
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun fix-smart-quotes (beg end)
+  "Replace 'smart quotes' in buffer or region with ascii quotes."
+  (interactive "r")
+  (format-replace-strings '(("\x201C" . "\"")
+                            ("\x201D" . "\"")
+                            ("\x2018" . "'")
+                            ("\x2019" . "'"))
+                          nil beg end))
+#+END_SRC
+
+*** Remove ^M
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun remove-control-m ()
+  (interactive)
+  (goto-char 1)
+  (while (search-forward "
+" nil t)
+    (replace-match "" t nil)))
+#+END_SRC
+
+*** Unfill paragraph
+
+Unfill functions providing the inverse of fill-paragraph and fill-region
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package unfill
+             :init (setq-default fill-column 80))
+#+END_SRC
+
+*** Browse Kill Ring
+
+KEYBINDING: "M y"
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package browse-kill-ring
+             :init (browse-kill-ring-default-keybindings))
+#+END_SRC
+
+*** Remote editing via tramp
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package tramp
+             :init (setq tramp-default-method "ssh"))
+#+END_SRC
+
+** Search/replace
+*** Showing search results
+Display 'current match/total matches' in the mode-line in various search modes
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package anzu
+             :diminish anzu-mode
+             :init (global-anzu-mode +1))
+#+END_SRC
+
+*** Regex search/replace
+I'm not a big fan of the regular expression syntax in emacs,
+so install visual-regexp-steroids to use Python's regex model.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package visual-regexp-steroids
+             :require (visual-regexp)
+             :bind (("C-c r" . vr/replace)
+                    ("C-c q" . vr/query-replace)
+                    ("C-r" . vr/isearch-backward)
+                    ("C-s" . vr/isearch-forward)))
+#+END_SRC
+
+** Windows
+*** Recover window split with winner-mode
+Enable C-c <left> to get back the previous window split
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(winner-mode 1)
+#+END_SRC
+
+*** Jumping between windows
+
+Allow switching between windows with CTRL+Tab
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-set-key (kbd "C-<tab>") 'other-window)
+#+END_SRC
+
+*** Mimic tmux
+
+I use tmux a lot, and often find when I switch back to emacs
+that I use the tmux pane-switch command from muscle memory.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-unset-key "\C-b")
+(global-set-key (kbd "C-b <down>") 'other-window)
+(global-set-key (kbd "C-b <up>") 'previous-multiframe-window)
+#+END_SRC
+
+** Org-mode
+*** Fix keybindings
+
+Org-mode has some very annoying keybindings, which interfere with my preferred keybindings.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(add-hook 'org-mode-hook
+  (lambda()
+    (local-unset-key (kbd "C-<tab>")) ; allow switching between frames
+    ))
+
+#+END_SRC
+
+I like to shift-select things, so enable that.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq org-support-shift-select 'always)
+#+END_SRC
+
+*** Bullets
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package org-bullets
+             :init (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
+#+END_SRC
+
+*** Todo
+
+Add font styles to DONE lines.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq org-fontify-done-headline t)
+#+END_SRC
+
+** Programming
+*** Common
+Enable CamelCase awareness for all programming modes
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(add-hook 'prog-mode-hook 'subword-mode)
+(eval-after-load "subword" '(diminish 'subword-mode))
+#+END_SRC
+
+Enable better commenting:
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package comment-dwim-2
+             :bind  (("M-;" . comment-dwim-2)))
+#+END_SRC
+
+*** Flycheck
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package flycheck
+             :require (dash s f exec-path-from-shell flycheck-color-mode-line)
+             :ensure flycheck
+             :diminish (flycheck-mode . " ✓ ")
+             :config (add-hook 'after-init-hook 'global-flycheck-mode)
+             :defer t
+             :init
+             (progn
+               (add-hook 'after-init-hook 'global-flycheck-mode)
+               (eval-after-load "flycheck"
+                 '(add-hook 'flycheck-mode-hook 'flycheck-color-mode-line-mode))
+               ))
+#+END_SRC
+
+*** Python
+
+A hydra for testing with nose.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defhydra hydra-nosetest (:color blue)
+  "nosetest"
+  ("t" nosetests-all "test all")
+  ("m" nosetests-module "module")
+  ("o" nosetests-one "one")
+  ("a" nosetests-again "again")
+  ("q" nil "cancel"))
+#+END_SRC
+
+Install elpy for working with Python, with the =jedi= backend, and nose.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package elpy
+             :require (nose)
+             :defer t
+             :init 
+             (progn
+               (setq elpy-rpc-backend "jedi")
+               (elpy-enable)
+               (when (executable-find "ipython")
+                 (elpy-use-ipython))
+               (define-key elpy-mode-map (kbd "M-<left>") nil)
+               (define-key elpy-mode-map (kbd "M-<right>") nil)
+               (define-key elpy-mode-map (kbd "C-M-<left>") 'elpy-nav-indent-shift-left)
+               (define-key elpy-mode-map (kbd "C-M-<right>") 'elpy-nav-indent-shift-right)
+               (nose-mode t)
+               (define-key elpy-mode-map (kbd "C-c n") 'hydra-nosetest/body)
+              ))
+#+END_SRC
+
+Enable company mode auto-completion backend for python, and some
+custom key-bindings
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun my/python-mode-hook ()
+  (with-eval-after-load 'company-mode
+    (define-key python-mode-map (kbd "<tab>") 'python-indent-shift-right)
+    (define-key python-mode-map (kbd "S-<tab>") 'python-indent-shift-left)
+    (add-to-list 'company-backends 'company-jedi)
+    (company-mode)
+    ))
+(add-hook 'python-mode-hook 'my/python-mode-hook)
+#+END_SRC
+
+I occasionally use Jinja for templating, so let's add that mode too.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package jinja2-mode
+             :diminish ""
+             :mode ("\\.jinja2\\'" . jinja2-mode))
+#+END_SRC
+
+Add =cython-mode= for working with Cython files.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package cython-mode)
+#+END_SRC
+
+*** Elixir
+
+Adding Alchemist for elixir programming.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package ruby-end)
+(req-package alchemist
+             :requires (elixir-mode)
+             :defer t
+             :mode ("\\.exs\\'" . alchemist-mode))
+
+(add-hook 'elixir-mode-hook 'alchemist-mode)
+(add-hook 'elixir-mode-hook 'company-mode)
+(add-hook 'elixir-mode-hook
+          (lambda ()
+            (set (make-variable-buffer-local 'ruby-end-expand-keywords-before-re)
+                 "\\(?:^\\|\\s-+\\)\\(?:do\\)")
+            (set (make-variable-buffer-local 'ruby-end-check-statement-modifiers)
+                 nil)
+            (ruby-end-mode 1)))
+#+END_SRC
+
+*** Elm
+
+Adding elm for front-end stuff
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package elm-mode
+             :requires (flycheck-elm))
+(eval-after-load 'flycheck
+    '(add-hook 'flycheck-mode-hook #'flycheck-elm-setup))
+(with-eval-after-load 'company
+  (add-to-list 'company-backends 'company-elm))
+(add-hook 'elm-mode-hook 'company-mode)
+(add-hook 'elm-mode-hook #'elm-oracle-setup-completion)
+#+END_SRC
+
+*** CoffeeScript
+Adding elm for front-end stuff
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package coffee-mode)
+#+END_SRC
+** Markup
+*** Sass/Scss
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package sass-mode
+             :requires (flycheck-sass))
+#+END_SRC
+*** Less
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package less-css-mode
+             :requires (flycheck-less))
+#+END_SRC
+*** Yaml
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package yaml-mode
+             :requires (flycheck-yaml))
+#+END_SRC
+*** Markdown
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package markdown-mode
+             :requires (flycheck-markdown))
+#+END_SRC
+** Terminal
+*** Multi-term
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package multi-term
+             :init
+             (progn
+               (setq multi-term-program "/bin/zsh")
+               ))
+#+END_SRC
+
+*** Misc fixes
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq term-scroll-show-maximum-output 1)
+(setq system-uses-terminfo nil)
+(add-hook 'shell-mode-hook 'ansi-color-for-comint-mode-on)
+(add-to-list 'comint-output-filter-functions 'ansi-color-process-output)
+#+END_SRC
+
+** Finalising
+*** Kick-off the package install.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package-finish)
+#+END_SRC
+
+*** Set default gc
+
+Now everything is set up, I want to return the gc level 
+back to the default to make the UI more responsive
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq gc-cons-threshold 800000)
+#+END_SRC
+
+I also want to make sure any minibuffer operations
+don't trigger the gc, so tools like flx won't pause.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun my-minibuffer-setup-hook ()
+  (setq gc-cons-threshold most-positive-fixnum))
+
+(defun my-minibuffer-exit-hook ()
+  (setq gc-cons-threshold 800000))
+
+(add-hook 'minibuffer-setup-hook #'my-minibuffer-setup-hook)
+(add-hook 'minibuffer-exit-hook #'my-minibuffer-exit-hook)
+#+END_SRC

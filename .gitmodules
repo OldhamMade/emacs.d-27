@@ -1,0 +1,3 @@
+[submodule "themes/leiptr"]
+	path = themes/leiptr
+	url = git@github.com:OldhamMade/leiptr-theme.git
