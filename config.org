@@ -5,7 +5,7 @@
 
 This is the Emacs environment I (Phillip B Oldham, Oldham-Made) use for
 development. This file is a literate programming document written with org-mode
-and org-mode-babel. You can view config.org in a web browser on GitHub, or read 
+and org-mode-babel. You can view config.org in a web browser on GitHub, or read
 config.org directly in Emacs.
 
 I generally only use Emacs on OS X, so there is a lot of customization around that OS.
@@ -245,10 +245,10 @@ Allow clicking the line-numbers to select the line(s)
     (setq *linum-mdown*
       nil))))
 
-(global-set-key (kbd "<left-margin> <down-mouse-1>") 'md-select-linum)
-(global-set-key (kbd "<left-margin> <mouse-1>") 'mu-select-linum)
-(global-set-key (kbd "<left-margin> <S-mouse-1>") 'mu-select-linum)
-(global-set-key (kbd "<left-margin> <drag-mouse-1>") 'mu-select-linum)
+(bind-keys ("<left-margin> <down-mouse-1>" . md-select-linum)
+           ("<left-margin> <mouse-1>" . mu-select-linum)
+           ("<left-margin> <S-mouse-1>" . mu-select-linum)
+           ("<left-margin> <drag-mouse-1>" . mu-select-linum))
 #+END_SRC
 
 *** Seeing changes when working with Git
@@ -260,8 +260,8 @@ Allow clicking the line-numbers to select the line(s)
                (require 'git-gutter-fringe+)
                (global-git-gutter+-mode)
                (git-gutter-fr+-minimal)
-               (setq-default left-fringe-width  16)
-               (setq-default right-fringe-width 16)
+               (setq-default left-fringe-width  16
+                             right-fringe-width 16)
                (eval-after-load "git-gutter+" '(diminish 'git-gutter+-mode))
                ))
 #+END_SRC
@@ -320,113 +320,76 @@ Reduce the amount of rubbish in the modeline...
 Set Option as Meta, and add Cmd as "Hyper"
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(setq mac-command-modifier 'alt mac-option-modifier 'meta)
-(setq mac-command-modifier 'hyper)
+(setq mac-command-modifier 'alt
+      mac-option-modifier 'meta
+      mac-command-modifier 'hyper)
 #+END_SRC
 
 Undo/redo
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(global-set-key [(hyper z)] 'undo)
-(global-set-key [(hyper shift z)] 'redo)
-#+END_SRC
-
-Select all
-
-#+BEGIN_SRC emacs-lisp :tangle yes
-(global-set-key [(hyper a)] 'mark-whole-buffer)
-#+END_SRC
-
-Cut/copy/paste
-
-#+BEGIN_SRC emacs-lisp :tangle yes
-(global-set-key [(hyper x)] 'kill-region)
-(global-set-key [(hyper c)] 'kill-ring-save)
-(global-set-key [(hyper v)] 'yank)
-#+END_SRC
-
-Open/save/close/quit
-
-#+BEGIN_SRC emacs-lisp :tangle yes
-(global-set-key [(hyper o)] 'find-file)
-(global-set-key [(hyper s)] 'save-buffer)
-(global-set-key [(hyper w)]
-                (lambda () (interactive) (my-kill-buffer (current-buffer))))
-(global-set-key [(hyper q)] 'save-buffers-kill-emacs)
-#+END_SRC
-
-Minimise/hide
-
-#+BEGIN_SRC emacs-lisp :tangle yes
-(global-set-key [(hyper m)] 'iconify-frame)
-(global-set-key [(hyper h)] 'ns-do-hide-emacs)
-#+END_SRC
-
-Search
-
-#+BEGIN_SRC emacs-lisp :tangle yes
-(global-set-key [(hyper f)] 'isearch-forward)
-(global-set-key [(hyper g)] 'isearch-repeat-forward)
-#+END_SRC
-
-Moving the cursor
-
-#+BEGIN_SRC emacs-lisp :tangle yes
-(global-set-key [(hyper left)] 'beginning-of-line)
-(global-set-key [(hyper right)] 'end-of-line)
-(global-set-key [(hyper t)] 'beginning-of-buffer)
-(global-set-key [(hyper b)] 'end-of-buffer)
-#+END_SRC
-
-Changing case
-
-#+BEGIN_SRC emacs-lisp :tangle yes
-(global-set-key [(hyper u)] 'upcase-region)
-(global-set-key [(hyper l)] 'downcase-region)
-#+END_SRC
-
-Goto line
-
-#+BEGIN_SRC emacs-lisp :tangle yes
-(global-set-key [(hyper j)] 'goto-line)
-#+END_SRC
-
-Remove the space in a selection to join lines
-
-#+BEGIN_SRC emacs-lisp :tangle yes
-(global-set-key (kbd "H-S-<backspace>") 'join-line)
-#+END_SRC
-
-Repeat the last command
-
-#+BEGIN_SRC emacs-lisp :tangle yes
-(global-set-key [(hyper shift r)] 'repeat)
-#+END_SRC
-
-Use the Escape key to escape the keyboard
-
-#+BEGIN_SRC emacs-lisp :tangle yes
-(define-key local-function-key-map [cancel] [H-Esc])
-(global-set-key (kbd "<escape>") 'keyboard-escape-quit)
-#+END_SRC
-
-Allow euro to be entered
-
-#+BEGIN_SRC emacs-lisp :tangle yes
-(global-set-key (kbd "M-2") '(lambda () (interactive) (insert "€")))
-#+END_SRC
-
-Allow hash to be entered
-
-#+BEGIN_SRC emacs-lisp :tangle yes
-(global-set-key (kbd "M-3") '(lambda () (interactive) (insert "#")))
-#+END_SRC
-
-Text resizing
-
-#+BEGIN_SRC emacs-lisp :tangle yes
-(global-set-key (kbd "H-=") 'text-scale-increase)
-(global-set-key (kbd "H--") 'text-scale-decrease)
+(bind-keys* ("H-z" . undo)
+            ("H-S-z" . redo)
+            ;; Select all
+            ("H-a" . mark-whole-buffer)
+            ;; cut
+            ("H-x" . kill-region)
+            ;; copy
+            ("H-c" . kill-ring-save)
+            ;; paste
+            ("H-v" . yank)
+            ;; open
+            ("H-o" . find-file)
+            ;; save
+            ("H-s" . save-buffer)
+            ;;  close
+            ("H-w" . (lambda ()
+                       (interactive)
+                       (my-kill-buffer
+                         (current-buffer))))
+            ;; quit
+            ("H-q" . save-buffers-kill-emacs)
+            ;; minimise
+            ("H-m" . conify-frame)
+            ;; hide
+            ("H-h" . ns-do-hide-emacs)
+            ;; search
+            ("H-f" . isearch-forward)
+            ("H-g" . isearch-repeat-forward)
+            ;; jump to beginning of line
+            ("H-<left>" . beginning-of-line)
+            ;; jump to end of line
+            ("H-<right>" . end-of-line)
+            ;; jump to top of file
+            ("H-t" . beginning-of-buffer)
+            ;; jump to bottom of file
+            ("H-b" . end-of-buffer)
+            ;; uppercase region
+            ("H-u" . upcase-region)
+            ;; lowercase region
+            ("H-l" . downcase-region)
+            ;; jump to line number
+            ("H-j" . goto-line)
+            ;; join a line with the previous one
+            ;; and balance spaces
+            ("H-S-<backspace>" . join-line)
+            ;; Repeat the last command
+            ("H-S-r" . repeat)
+            ;; Use the Escape key to escape the keyboard
+            ("<escape>" . keyboard-escape-quit)
+            ;; Allow euro to be entered
+            ("M-2" . '(lambda ()
+                        (interactive)
+                        (insert "€")))
+            ;; Allow hash to be entered
+            ("M-3" . '(lambda ()
+                        (interactive)
+                        (insert "#")))
+            ;; make text larger
+            ("H-=" . text-scale-increase)
+            ;; make text smaller
+            ("H--" . text-scale-decrease)
+            )
 #+END_SRC
 
 *** Key chords
@@ -458,7 +421,7 @@ Text resizing
 #+END_SRC
 
 *** Hydra
-Hydra is a package that can be used to tie related commands 
+Hydra is a package that can be used to tie related commands
 into a family of short bindings with a common prefix.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -477,7 +440,7 @@ into a family of short bindings with a common prefix.
                (global-company-mode 1)
                (company-quickhelp-mode 1)
                (setq company-idle-delay 0.2)
-               (define-key company-mode-map "\t" 'company-complete-common)
+               (bind-key "\t" 'company-complete-common company-mode-map)
                ))
 #+END_SRC
 
@@ -565,7 +528,7 @@ easier to visually search
   (let ((newbuf (generate-new-buffer-name "untitled")))
     (switch-to-buffer newbuf)))
 
-(global-set-key [(hyper n)] 'new-empty-buffer)
+(bind-key* "H-n" 'new-empty-buffer)
 #+END_SRC
 
 *** Scratch buffer management
@@ -684,7 +647,7 @@ Bury certain buffers instead of kill them
   (interactive)
   (custom-switch-buffer (reverse (buffer-list))))
 
-(global-set-key [(hyper down)] 'custom-prev-buffer)
+(bind-key "H-<down>" 'custom-prev-buffer)
 
 (defun custom-next-buffer ()
   "Switch to the other buffer (2nd in list-buffer) in current window."
@@ -692,8 +655,8 @@ Bury certain buffers instead of kill them
   (bury-buffer (current-buffer))
   (custom-switch-buffer (buffer-list)))
 
-(global-set-key [(hyper up)] 'custom-next-buffer)
-    #+END_SRC
+(bind-key "H-<up>" 'custom-next-buffer)
+#+END_SRC
 
 *** Copy buffer path to kill ring
 
@@ -891,7 +854,7 @@ Use ido for recently open files
       (message "Opening file...")
     (message "Aborting")))
 
-(global-set-key (kbd "H-S-o") 'ido-recentf-open)
+(bind-key "H-S-o" 'ido-recentf-open)
 #+END_SRC
 
 *** Smex
@@ -937,8 +900,9 @@ the line. Repeated use of `C-a' toggles between these two positions.
       (when (= (point) start-position)
           (back-to-indentation))))
 
-  (global-set-key (kbd "C-a") 'beginning-of-line-dwim)
-  (global-set-key (kbd "H-<left>") 'beginning-of-line-dwim)
+  (bind-keys
+    ("C-a" . beginning-of-line-dwim)
+    ("H-<left>" . beginning-of-line-dwim))
 #+END_SRC
 
 *** By last change
@@ -953,22 +917,6 @@ KEYBINDING: "M -"
              :bind ("H-M-<left>" . goto-last-change))
 #+END_SRC
 
-*** Swiper
-Swiper is a package that shows an overview during regex searching.
-
-KEYBINDING: "S-H-j"
-
-#+BEGIN_SRC emacs-lisp :tangle yes
-(req-package swiper
-             :requires (ivy)
-             :diminish ""
-             :bind ("S-H-j" . swiper)
-             :init
-             (progn
-               (ivy-mode 1)
-               (setq ivy-use-virtual-buffers t)
-               ))
-#+END_SRC
 *** Avy
 Avy is a package for jumping to visible text using a char-based decision tree
 
@@ -977,7 +925,7 @@ KEYBINDING: "C-H-j"
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package avy
              :diminish ""
-             :init 
+             :init
              (progn
                (defhydra hydra-avy (:color blue)
                  "avy-goto"
@@ -985,7 +933,7 @@ KEYBINDING: "C-H-j"
                  ("k" avy-goto-char-2 "char-2")
                  ("l" avy-goto-line "line")
                  ("q" nil "quit"))
-               (global-set-key (kbd "C-H-j") 'hydra-avy/body)
+               (bind-key "C-H-j" 'hydra-avy/body)
                ))
 #+END_SRC
 ** Editing
@@ -1037,9 +985,9 @@ simpler tree structure. It also allows us to visualize the tree directly.
 Enable CUA mode for using =C-RET= for working with rectangles.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(setq cua-enable-cua-keys nil)
-(setq cua-highlight-region-shift-only t)
-(setq cua-toggle-set-mark nil)
+(setq cua-enable-cua-keys nil
+      cua-highlight-region-shift-only t
+      cua-toggle-set-mark nil)
 (cua-mode)
 #+END_SRC
 
@@ -1057,9 +1005,9 @@ Transient-mark-mode needs to be reenabled after enabling CUA-mode
              :init
              (progn
               (autopair-global-mode)
-              (setq show-paren-delay 0)
+              (setq show-paren-delay 0
+                    show-paren-style 'parenthesis)
               (show-paren-mode t)
-              (setq show-paren-style 'parenthesis)
               (add-hook 'term-mode-hook
                         #'(lambda ()
                             (setq autopair-dont-activate t)
@@ -1161,7 +1109,7 @@ Enable C-c <left> to get back the previous window split
 Allow switching between windows with CTRL+Tab
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(global-set-key (kbd "C-<tab>") 'other-window)
+(bind-key "C-<tab>" 'other-window)
 #+END_SRC
 
 *** Mimic tmux
@@ -1170,13 +1118,18 @@ I use tmux a lot, and often find when I switch back to emacs
 that I use the tmux pane-switch command from muscle memory.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(global-unset-key "\C-b")
-(global-set-key (kbd "C-b <down>") 'other-window)
-(global-set-key (kbd "C-b <up>") 'previous-multiframe-window)
+(unbind-key "\C-b")
+(bind-keys* ("C-b <down>" . other-window)
+            ("C-b <up>" . previous-multiframe-window))
 #+END_SRC
 
 ** Org-mode
 *** Fix keybindings
+Allow indenting natively within source blocks.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq org-src-tab-acts-natively t)
+#+END_SRC
 
 Org-mode has some very annoying keybindings, which interfere with my preferred keybindings.
 
@@ -1185,7 +1138,6 @@ Org-mode has some very annoying keybindings, which interfere with my preferred k
   (lambda()
     (local-unset-key (kbd "C-<tab>")) ; allow switching between frames
     ))
-
 #+END_SRC
 
 I like to shift-select things, so enable that.
@@ -1262,18 +1214,19 @@ Install elpy for working with Python, with the =jedi= backend, and nose.
 (req-package elpy
              :require (nose)
              :defer t
-             :init 
+             :init
              (progn
                (setq elpy-rpc-backend "jedi")
                (elpy-enable)
                (when (executable-find "ipython")
                  (elpy-use-ipython))
-               (define-key elpy-mode-map (kbd "M-<left>") nil)
-               (define-key elpy-mode-map (kbd "M-<right>") nil)
-               (define-key elpy-mode-map (kbd "C-M-<left>") 'elpy-nav-indent-shift-left)
-               (define-key elpy-mode-map (kbd "C-M-<right>") 'elpy-nav-indent-shift-right)
                (nose-mode t)
-               (define-key elpy-mode-map (kbd "C-c n") 'hydra-nosetest/body)
+               (bind-keys :map elpy-mode-map
+                          ("M-<left>" . nil)
+                          ("M-<right>" . nil)
+                          ("C-M-<left>" . elpy-nav-indent-shift-left)
+                          ("C-M-<right>" . elpy-nav-indent-shift-right)
+                          ("C-c n" . hydra-nosetest/body))
               ))
 #+END_SRC
 
@@ -1283,8 +1236,9 @@ custom key-bindings
 #+BEGIN_SRC emacs-lisp :tangle yes
 (defun my/python-mode-hook ()
   (with-eval-after-load 'company-mode
-    (define-key python-mode-map (kbd "<tab>") 'python-indent-shift-right)
-    (define-key python-mode-map (kbd "S-<tab>") 'python-indent-shift-left)
+    (bind-keys :map elpy-mode-map
+               ("<tab>" . python-indent-shift-right)
+               ("S-<tab>" . python-indent-shift-left))
     (add-to-list 'company-backends 'company-jedi)
     (company-mode)
     ))
@@ -1438,7 +1392,7 @@ Add the ability to run tests from emacs. Also add some snippets to make writing 
 
 *** Set default gc
 
-Now everything is set up, I want to return the gc level 
+Now everything is set up, I want to return the gc level
 back to the default to make the UI more responsive
 
 #+BEGIN_SRC emacs-lisp :tangle yes
