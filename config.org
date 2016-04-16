@@ -40,6 +40,15 @@ Code I've written (this org file, init.el, and other files in this repository)
 is MIT licensed.
 
 * Contents
+** Basic Settings
+
+Some very basic settings for my environment
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq user-full-name "Phillip B Oldham"
+      change-log-default-name "CHANGELOG")
+#+END_SRC
+
 ** Performance
 
 First-off, lets do some performance tweaks to keep things ticking along
@@ -172,15 +181,6 @@ diminish hides or abbreviates minor mode indicators in the modeline
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package diminish)
-#+END_SRC
-
-** Basic Settings
-
-Some very basic settings for my environment
-
-#+BEGIN_SRC emacs-lisp :tangle yes
-(setq user-full-name "Phillip B Oldham"
-      change-log-default-name "CHANGELOG")
 #+END_SRC
 
 ** Interface
@@ -1187,17 +1187,18 @@ Enable better commenting:
              :bind  (("M-;" . comment-dwim-2)))
 #+END_SRC
 
-=semantic-stickyfunc-mode= shows function interface/class/namespace 
-that has part of it at the top of current visible screen. =stickyfunc-enhance=
-adds improvements to this functionality.
+It's useful to know which function one is in while editing,
+so display it in the header-line.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(req-package stickyfunc-enhance
-             :init
-             (progn
-               (add-to-list 'semantic-default-submodes 'global-semantic-stickyfunc-mode)
-               (semantic-mode 1)
-               ))
+(which-function-mode)
+(setq which-func-unknown "")
+(setq-default header-line-format
+              '((which-func-mode ("" which-func-format " "))))
+(setq mode-line-misc-info
+            ;; We remove Which Function Mode from the mode line, because it's mostly
+            ;; invisible here anyway.
+            (assq-delete-all 'which-func-mode mode-line-misc-info))
 #+END_SRC
 
 *** Flycheck
