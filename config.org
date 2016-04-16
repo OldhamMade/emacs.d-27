@@ -349,8 +349,10 @@ Undo/redo
                          (current-buffer))))
             ;; quit
             ("H-q" . save-buffers-kill-emacs)
+            ;; maximise
+            ("<f12>" . toggle-frame-fullscreen)
             ;; minimise
-            ("H-m" . conify-frame)
+            ("H-m" . iconify-frame)
             ;; hide
             ("H-h" . ns-do-hide-emacs)
             ;; search
@@ -393,30 +395,39 @@ Undo/redo
 #+END_SRC
 
 *** Key chords
+
+I like to set up a number of key-chords that work well for my natural
+hand placement on my macbook's keyboard, aiming for combos that won't
+generally be activated accidentally during typing (I type quite fast).
+
 #+BEGIN_SRC emacs-lisp :tangle yes
+(defun my/key-chord-mode-hook ()
+  (when (memq window-system '(mac ns))
+    (key-chord-define-global "§1" 'toggle-frame-fullscreen))
+  (key-chord-define-global "o0" 'find-file)
+  (key-chord-define-global "o=" 'dired-jump)
+  (key-chord-define-global "o-" 'ido-recentf-open)
+  (key-chord-define-global "o[" 'find-file-at-point)
+  (key-chord-define-global "p-" 'projectile-find-file)
+  (key-chord-define-global "t5" 'untabify)
+  (key-chord-define-global "r4" 'replace-string)
+  (key-chord-define-global "r3" 'vr/query-replace)
+  (key-chord-define-global "e3" 'er/expand-region)
+  (key-chord-define-global "e2" 'er/contract-region)
+  (key-chord-define-global "p[" 'fill-paragraph)
+  (key-chord-define-global "p]" 'unfill-paragraph)
+  (key-chord-define-global " k" 'delete-trailing-whitespace)
+  (key-chord-define-global "m," 'my-previous-like-this)
+  (key-chord-define-global "m." 'my-more-like-this)
+  (key-chord-define-global "s1" 'ispell-region)
+  (key-chord-define-global "d3" 'ignore) ;; useful combo, but unused
+)
 (req-package key-chord
+             :defer t
              :init
              (progn
                (key-chord-mode 1)
-               (when (memq window-system '(mac ns))
-                 (key-chord-define-global "§1" 'smex))
-               (key-chord-define-global "o0" 'find-file)
-               (key-chord-define-global "o=" 'dired-jump)
-               (key-chord-define-global "o-" 'ido-recentf-open)
-               (key-chord-define-global "o[" 'find-file-at-point)
-               (key-chord-define-global "p-" 'projectile-find-file)
-               (key-chord-define-global "t5" 'untabify)
-               (key-chord-define-global "r4" 'replace-string)
-               (key-chord-define-global "r3" 'vr/query-replace)
-               (key-chord-define-global "e3" 'er/expand-region)
-               (key-chord-define-global "e2" 'er/contract-region)
-               (key-chord-define-global "p[" 'fill-paragraph)
-               (key-chord-define-global "p]" 'unfill-paragraph)
-               (key-chord-define-global " k" 'delete-trailing-whitespace)
-               (key-chord-define-global "m," 'my-previous-like-this)
-               (key-chord-define-global "m." 'my-more-like-this)
-               (key-chord-define-global "s1" 'ispell-region)
-               (key-chord-define-global "d3" 'deft)
+               (my/key-chord-mode-hook)
                ))
 #+END_SRC
 
@@ -1174,6 +1185,19 @@ Enable better commenting:
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package comment-dwim-2
              :bind  (("M-;" . comment-dwim-2)))
+#+END_SRC
+
+=semantic-stickyfunc-mode= shows function interface/class/namespace 
+that has part of it at the top of current visible screen. =stickyfunc-enhance=
+adds improvements to this functionality.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package stickyfunc-enhance
+             :init
+             (progn
+               (add-to-list 'semantic-default-submodes 'global-semantic-stickyfunc-mode)
+               (semantic-mode 1)
+               ))
 #+END_SRC
 
 *** Flycheck
