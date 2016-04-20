@@ -15,6 +15,9 @@ Inspiration has been taking from the following sources:
 - http://www.wilfred.me.uk/.emacs.d/init.org
 - http://dl.dropboxusercontent.com/u/3968124/sacha-emacs.html
 - https://github.com/jhenahan/emacs.d/blob/master/init.org
+- https://github.com/zk-phi/symon/
+
+And many others...
 
 ** Generation and Usage
 
@@ -38,6 +41,15 @@ Inspiration has been taking from the following sources:
 
 Code I've written (this org file, init.el, and other files in this repository)
 is MIT licensed.
+
+** To Do
+
+These are items I'm considering adding at a later date:
+
+- https://github.com/chrisdone/god-mode
+- https://github.com/nschum/highlight-symbol.el
+- http://ternjs.net
+- https://www.emacswiki.org/emacs/HideShow and https://www.emacswiki.org/emacs/download/hideshowvis.el
 
 * Contents
 ** Basic Settings
@@ -951,10 +963,13 @@ KEYBINDING: "C-H-j"
 *** Showing changes
 Highlight changes to the buffer caused by commands such as ‘undo’, ‘yank’/’yank-pop’, etc.
 
-#+BEGIN_SRC emacs-lisp :tangle yes
+Note: disabled for now, as it interacts badly with cua-paste
+
+#+BEGIN_SRC emacs-lisp :tangle no
 (req-package volatile-highlights
+             :defer t
              :diminish volatile-highlights-mode
-             :config (volatile-highlights-mode t))
+             :init (volatile-highlights-mode t))
 #+END_SRC
 
 *** Tabs
@@ -996,11 +1011,33 @@ simpler tree structure. It also allows us to visualize the tree directly.
 Enable CUA mode for using =C-RET= for working with rectangles.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
+(cua-mode)
 (setq cua-enable-cua-keys nil
+      cua-remap-control-v nil
       cua-highlight-region-shift-only t
       cua-toggle-set-mark nil)
-(cua-mode)
+
+(setq-default cua-enable-cua-keys nil
+              cua-highlight-region-shift-only t
+              cua-toggle-set-mark nil)
+
+;; re-bind H-v to yank, as cua-paste breaks other modes
+(global-unset-key (kbd "H-v"))
+(define-key cua-global-keymap (kbd "H-v") nil)
+(define-key cua-global-keymap [remap cua-paste] 'yank)
+(bind-keys* ("H-v" . yank))
+
+;; shift + click select region
+(define-key global-map (kbd "<S-down-mouse-1>") 'ignore) ; turn off font dialog
+(define-key global-map (kbd "<S-mouse-1>") 'mouse-set-point)
+(put 'mouse-set-point 'CUA 'move)
 #+END_SRC
+
+#--- +BEGIN_SRC emacs-lisp :tangle yes
+(add-to-list 'load-path (expand-file-name "custom/cua-lite" dotfiles-dir))
+(require 'cua-lite)
+;; (cua-lite 1)
+#--- +END_SRC
 
 Transient-mark-mode needs to be reenabled after enabling CUA-mode
 
@@ -1173,32 +1210,28 @@ Add font styles to DONE lines.
 
 ** Programming
 *** Common
-Enable CamelCase awareness for all programming modes
-
+**** Enable CamelCase awareness for all programming modes
 #+BEGIN_SRC emacs-lisp :tangle yes
 (add-hook 'prog-mode-hook 'subword-mode)
 (eval-after-load "subword" '(diminish 'subword-mode))
 #+END_SRC
-
-Enable better commenting:
-
+**** Better commenting
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package comment-dwim-2
              :bind  (("M-;" . comment-dwim-2)))
 #+END_SRC
-
-It's useful to know which function one is in while editing,
-so display it in the header-line.
-
+**** Automated white-space cleanup
 #+BEGIN_SRC emacs-lisp :tangle yes
-(which-function-mode)
-(setq which-func-unknown "")
-(setq-default header-line-format
-              '((which-func-mode ("" which-func-format " "))))
-(setq mode-line-misc-info
-            ;; We remove Which Function Mode from the mode line, because it's mostly
-            ;; invisible here anyway.
-            (assq-delete-all 'which-func-mode mode-line-misc-info))
+(req-package whitespace-cleanup-mode
+             :defer t
+             :init (global-whitespace-cleanup-mode t))
+#+END_SRC
+
+**** Aggressive indent
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package aggressive-indent
+             :defer t
+             :init (global-aggressive-indent-mode t))
 #+END_SRC
 
 *** Flycheck
@@ -1309,6 +1342,17 @@ Adding Alchemist for elixir programming.
 (req-package haskell-mode
              :defer t
              :mode ("\\.l?hs\\'" . haskell-mode))
+#+END_SRC
+**** Nim
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package nim-mode
+             :defer t
+             :mode ("\\.nim\\'" . nim-mode)
+             :init
+             (progn
+(add-to-list 'company-backends
+               '(company-nim :with company-nim-builtin))
+))
 #+END_SRC
 *** Web
 **** HTML et al
