@@ -292,13 +292,83 @@ not. We display the recursion level in the minibuffer to avoid confusion.
                 (setq uniquify-buffer-name-style 'forward)
                 ))
 #+END_SRC
+*** Which-Function
+
+It's useful to know which function one is in while editing,
+so display it in the header-line.
+
+;;(setq mode-line-misc-info
+;;      (delete (assoc 'which-function-mode mode-line-misc-info) mode-line-misc-info))
+
+(setq which-func-header-line-format '(which-func-mode ("" which-func-format))
+      mode-line-misc-info (delete (assoc 'which-func-mode
+                                         mode-line-misc-info) mode-line-misc-info)
+      header-line-format (list which-func-header-line-format))
+;;(setq-default header-line-format
+;;              '((which-func-mode ("" which-func-format " "))))
+(which-function-mode)
+;;(setq which-func-format
+(setq which-func-header-line-format
+      `((:propertize (" ➤ " which-func-current)
+                     local-map ,which-func-keymap
+                     face which-func
+                     mouse-face mode-line-highlight
+                     help-echo "mouse-1: go to beginning"))
+     which-func-unknown "")
+(defun my/which-func-move-to-header ()
+(eval-after-load "which-function-mode"
+(let 
+   ((which-func '(which-func-mode ("" which-func-format " "))))
+   (setq-default mode-line-format (remove which-func mode-line-format))
+   (setq-default mode-line-misc-info (remove which-func mode-line-misc-info))
+   (setq-default header-line-format which-func))))
+(which-function-mode)
+(diminish 'which-function-mode)
+(when which-func-mode
+    (powerline-raw which-func-current nil))
+(advice-add 'which-func-ff-hook :after #'my/which-func-move-to-header)
+
+(powerline-raw which-func-format nil 'l)
+
+(which-function-mode)
+(defun my/which-func-move-to-header ()
+(eval-after-load "which-function-mode"
+(let 
+   (powerline-which-func 'which-func nil)
+   (setq mode-line-misc-info
+         (assq-delete-all 'which-func-mode mode-line-misc-info))
+   )))
+
+
+               (powerline-which-func 'which-func nil)
+               (powerline-raw which-func-format nil 'l)
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package which-function-mode
+             :diminish ""
+             :init
+             (progn
+(which-function-mode 1)
+(setq which-func-header-line-format
+      `((:propertize (" ➤ " which-func-current)
+                     local-map ,which-func-keymap
+                     face which-func
+                     mouse-face mode-line-highlight
+                     help-echo "mouse-1: go to beginning"))
+     which-func-unknown "")
+
+))
+#+END_SRC
 
 *** Modeline
 I prefer the cleaner Powerline to the usual modeline.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package powerline
-             :init (powerline-default-theme))
+             :defer t
+             :init
+             (progn
+               (powerline-default-theme)))
 #+END_SRC
 
 Reduce the amount of rubbish in the modeline...
@@ -1185,20 +1255,6 @@ Enable better commenting:
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package comment-dwim-2
              :bind  (("M-;" . comment-dwim-2)))
-#+END_SRC
-
-It's useful to know which function one is in while editing,
-so display it in the header-line.
-
-#+BEGIN_SRC emacs-lisp :tangle yes
-(which-function-mode)
-(setq which-func-unknown "")
-(setq-default header-line-format
-              '((which-func-mode ("" which-func-format " "))))
-(setq mode-line-misc-info
-            ;; We remove Which Function Mode from the mode line, because it's mostly
-            ;; invisible here anyway.
-            (assq-delete-all 'which-func-mode mode-line-misc-info))
 #+END_SRC
 
 *** Flycheck
