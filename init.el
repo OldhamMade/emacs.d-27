@@ -6,7 +6,7 @@
 
 ;;; Code:
 (let ((file-name-handler-alist nil))
-  (package-initialize)
+  (setq package-enable-at-startup nil)
   (require 'ob-tangle)
   (setq dotfiles-dir (file-name-directory
                       (or (buffer-file-name) load-file-name)))

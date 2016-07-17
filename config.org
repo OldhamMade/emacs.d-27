@@ -51,6 +51,13 @@ These are items I'm considering adding at a later date:
 - http://ternjs.net
 - https://www.emacswiki.org/emacs/HideShow and https://www.emacswiki.org/emacs/download/hideshowvis.el
 
+** Tried and removed
+*** Agressive Indent
+
+I liked this mode in certain instances, but it seemed to have problems when
+editing files with more than 100 lines, and even made emacs lock-up a couple 
+of times.
+
 * Contents
 ** Basic Settings
 
@@ -392,13 +399,13 @@ Undo/redo
             ;; Use the Escape key to escape the keyboard
             ("<escape>" . keyboard-escape-quit)
             ;; Allow euro to be entered
-            ("M-2" . '(lambda ()
-                        (interactive)
-                        (insert "€")))
+            ("M-2" . (lambda ()
+                       (interactive)
+                       (insert "€")))
             ;; Allow hash to be entered
-            ("M-3" . '(lambda ()
-                        (interactive)
-                        (insert "#")))
+            ("M-3" . (lambda ()
+                       (interactive)
+                       (insert "#")))
             ;; make text larger
             ("H-=" . text-scale-increase)
             ;; make text smaller
@@ -449,7 +456,6 @@ into a family of short bindings with a common prefix.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package 'hydra)
-(req-package-eval 'hydra)
 #+END_SRC
 
 ** Auto-completion (Company mode)
@@ -483,8 +489,8 @@ Turn syntax highlighting on by default
 			 :config (set-face-background 'highlight-indentation-face "#222")
              :init
              (progn
-               (add-hook 'python-mode-hook 'highlight-indentation-mode)
-               (add-hook 'alchemist-mode-hook 'highlight-indentation-mode)
+               (add-hook 'prog-mode-hook 'highlight-indentation-mode)
+               (add-hook 'yaml-mode-hook 'highlight-indentation-mode)
                ))
 #+END_SRC
 
@@ -496,6 +502,7 @@ Turn syntax highlighting on by default
              :init
              (progn
                (add-hook 'prog-mode-hook 'rainbow-delimiters-mode)
+               (add-hook 'sass-mode-hook 'rainbow-delimiters-mode)
                ))
 #+END_SRC
 
@@ -533,6 +540,14 @@ easier to visually search
                (add-hook 'css-mode-hook 'rainbow-mode)
                (add-hook 'emacs-lisp-mode-hook 'rainbow-mode)
                ))
+#+END_SRC
+
+*** Highlight fill-column
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package fill-column-indicator
+             :defer t
+             :init (fci-mode 1))
 #+END_SRC
 
 ** Buffers
@@ -787,16 +802,17 @@ Always reload the file on disk when it updates
 
 *** Autosaves and Backups
 
-Disable autosaving of files
+Autosaving of files
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(setq auto-save-default nil)
+(setq auto-save-file-name-transforms `((".*" , "~/.emacs.d/auto-save" t)))
 #+END_SRC
 
-Stop making backup files
+Backup files to a local directory.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(setq make-backup-files nil)
+(setq backup-by-copying t)
+(setq backup-directory-alist '(("" . "~/.emacs.d/auto-backup")))
 #+END_SRC
 
 *** Saving
@@ -959,6 +975,7 @@ KEYBINDING: "C-H-j"
                (bind-key "C-H-j" 'hydra-avy/body)
                ))
 #+END_SRC
+
 ** Editing
 *** Showing changes
 Highlight changes to the buffer caused by commands such as ‘undo’, ‘yank’/’yank-pop’, etc.
@@ -1121,6 +1138,16 @@ KEYBINDING: "M y"
              :init (setq tramp-default-method "ssh"))
 #+END_SRC
 
+*** Expand region
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package expand-region)
+#+END_SRC
+
+*** Multiple Cursors
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package multiple-cursors)
+#+END_SRC
+
 ** Search/replace
 *** Showing search results
 Display 'current match/total matches' in the mode-line in various search modes
@@ -1227,13 +1254,6 @@ Add font styles to DONE lines.
              :init (global-whitespace-cleanup-mode t))
 #+END_SRC
 
-**** Aggressive indent
-#+BEGIN_SRC emacs-lisp :tangle yes
-(req-package aggressive-indent
-             :defer t
-             :init (global-aggressive-indent-mode t))
-#+END_SRC
-
 *** Flycheck
 
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1308,7 +1328,7 @@ I occasionally use Jinja for templating, so let's add that mode too.
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package jinja2-mode
              :diminish ""
-             :mode ("\\.jinja2\\'" . jinja2-mode))
+             :mode ("\\.jinja2?\\'" . jinja2-mode))
 #+END_SRC
 
 Add =cython-mode= for working with Cython files.
@@ -1350,8 +1370,8 @@ Adding Alchemist for elixir programming.
              :mode ("\\.nim\\'" . nim-mode)
              :init
              (progn
-(add-to-list 'company-backends
-               '(company-nim :with company-nim-builtin))
+; (add-to-list 'company-backends
+;                '(company-nim :with company-nim-builtin))
 ))
 #+END_SRC
 *** Web
@@ -1363,6 +1383,20 @@ Adding Alchemist for elixir programming.
 (add-to-list 'auto-mode-alist '("\\.html?\\'" . web-mode))
 (add-to-list 'auto-mode-alist '("\\.mustache\\'" . web-mode))
 (add-to-list 'auto-mode-alist '("\\.jsx\\'" . web-mode))
+
+;; use eslint with web-mode for jsx files
+(with-eval-after-load 'flycheck
+  (flycheck-add-mode 'javascript-eslint 'web-mode))
+
+;; adjust indents for web-mode to 2 spaces
+(defun my-web-mode-hook ()
+  "Hooks for Web mode. Adjust indents"
+  ;;; http://web-mode.org/
+  (setq web-mode-markup-indent-offset 2)
+  (setq web-mode-css-indent-offset 2)
+  (setq web-mode-code-indent-offset 2))
+
+(add-hook 'web-mode-hook  'my-web-mode-hook)
 #+END_SRC
 
 **** JavaScript
@@ -1372,10 +1406,31 @@ Adding JavaScript
              :require (ac-js2 json-mode)
              :init
              (progn
-               (add-hook 'js2-mode-hook 'ac-js2-mode)
+               ;; disable jshint since we prefer eslint checking
+               (setq-default flycheck-disabled-checkers
+                 (append flycheck-disabled-checkers
+                   '(javascript-jshint)))
+
+               ;; disable json-jsonlist checking for json files
+               (setq-default flycheck-disabled-checkers
+                 (append flycheck-disabled-checkers
+                   '(json-jsonlist)))
+
+               (setq-default js-indent-level 2)
+               (setq-default js2-basic-offset 2)
                (add-hook 'js-mode-hook 'js2-minor-mode)
+               (add-hook 'js2-mode-hook 'ac-js2-mode)
                (add-to-list 'auto-mode-alist '("\\.js\\'" . js2-mode))
                (add-to-list 'auto-mode-alist '("\\.jsx?\\'" . js2-jsx-mode))
+
+               ;; for better jsx syntax-highlighting in web-mode
+               ;; - courtesy of Patrick @halbtuerke
+               (defadvice web-mode-highlight-part (around tweak-jsx activate)
+                 (if (equal web-mode-content-type "jsx")
+                   (let ((web-mode-enable-part-face nil))
+                     ad-do-it)
+                   ad-do-it))
+
                ))
 #+END_SRC
 **** CoffeeScript
@@ -1395,8 +1450,8 @@ Adding elm for front-end stuff
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package elm-mode
              :requires (flycheck-elm))
-(eval-after-load 'flycheck
-    '(add-hook 'flycheck-mode-hook #'flycheck-elm-setup))
+;(eval-after-load 'flycheck
+;    '(add-hook 'flycheck-mode-hook #'flycheck-elm-setup))
 (with-eval-after-load 'company
   (add-to-list 'company-backends 'company-elm))
 (add-hook 'elm-mode-hook 'company-mode)
@@ -1426,11 +1481,16 @@ Add the ability to run tests from emacs. Also add some snippets to make writing 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package yaml-mode
              :requires (flycheck-yaml))
+(add-to-list 'auto-mode-alist '("\\.raml\\'" . yaml-mode))
 #+END_SRC
 *** Markdown
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package markdown-mode
              :requires (flycheck-markdown))
+#+END_SRC
+*** Docker
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package dockerfile-mode)
 #+END_SRC
 ** Terminal
 *** Multi-term
