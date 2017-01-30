@@ -80,7 +80,7 @@ garbage collection during setup. I'll return this to the default
 after setup.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-  (setq gc-cons-threshold 100000000)
+(setq gc-cons-threshold 100000000)
 #+END_SRC
 
 Let's add some timestamps to the messages so we can see whether anything
@@ -97,8 +97,7 @@ is causing emacs to block for a significant amount of time.
   (if (not (string-equal (ad-get-arg 0) "%s%s"))
       (let ((deactivate-mark nil)
             (inhibit-read-only t))
-        (save-excursion
-          (set-buffer "*Messages*")
+        (with-current-buffer "*Messages*"
           (goto-char (point-max))
           (if (not (bolp))
               (newline))
@@ -147,6 +146,11 @@ Allow answering 'Yes or No' prompts with Y or N
 Reduce the message log to 512 entries
 #+BEGIN_SRC emacs-lisp :tangle yes
 (setq message-log-max 512)
+#+END_SRC
+
+Stop warnings
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq byte-compile-warnings nil)
 #+END_SRC
 
 ** Package Management
@@ -349,6 +353,7 @@ Undo/redo
 #+BEGIN_SRC emacs-lisp :tangle yes
 (bind-keys* ("H-z" . undo)
             ("H-S-z" . redo)
+            ("H-Z" . redo)
             ;; Select all
             ("H-a" . mark-whole-buffer)
             ;; cut
@@ -385,12 +390,12 @@ Undo/redo
             ("H-t" . beginning-of-buffer)
             ;; jump to bottom of file
             ("H-b" . end-of-buffer)
+            ;; jump to line number
+            ("H-C-l" . goto-line)
             ;; uppercase region
             ("H-u" . upcase-region)
             ;; lowercase region
             ("H-l" . downcase-region)
-            ;; jump to line number
-            ("H-j" . goto-line)
             ;; join a line with the previous one
             ;; and balance spaces
             ("H-S-<backspace>" . join-line)
@@ -410,6 +415,8 @@ Undo/redo
             ("H-=" . text-scale-increase)
             ;; make text smaller
             ("H--" . text-scale-decrease)
+            ;; prefer ibuffer
+            ("C-x C-b" . ibuffer)
             )
 #+END_SRC
 
@@ -427,6 +434,7 @@ generally be activated accidentally during typing (I type quite fast).
   (key-chord-define-global "o=" 'dired-jump)
   (key-chord-define-global "o-" 'ido-recentf-open)
   (key-chord-define-global "o[" 'find-file-at-point)
+  (key-chord-define-global "o;" 'occur)
   (key-chord-define-global "p-" 'projectile-find-file)
   (key-chord-define-global "t5" 'untabify)
   (key-chord-define-global "r4" 'replace-string)
@@ -439,7 +447,11 @@ generally be activated accidentally during typing (I type quite fast).
   (key-chord-define-global "m," 'my-previous-like-this)
   (key-chord-define-global "m." 'my-more-like-this)
   (key-chord-define-global "s1" 'ispell-region)
-  (key-chord-define-global "d3" 'ignore) ;; useful combo, but unused
+  (key-chord-define-global "bk" 'bm-toggle)
+  (key-chord-define-global "bn" 'bm-next)
+  (key-chord-define-global "bv" 'bm-previous)
+  (key-chord-define-global "d3" 'dash-at-point)
+  (key-chord-define-global "R$" 'rgrep)
 )
 (req-package key-chord
              :defer t
@@ -545,9 +557,11 @@ easier to visually search
 *** Highlight fill-column
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(req-package fill-column-indicator
-             :defer t
-             :init (fci-mode 1))
+(setq-default fci-rule-column 79)
+(setq-default fci-rule-character-color "red3")
+(setq fci-rule-width 1)
+(setq fci-rule-color "gray10")
+(add-hook 'after-change-major-mode-hook 'fci-mode)
 #+END_SRC
 
 ** Buffers
@@ -574,28 +588,26 @@ easier to visually search
 Now let's make the *scratch* buffer persistent across sessions
 
 #+BEGIN_SRC  emacs-lisp :tangle yes
-(defvar persistent-scratch-filename
-    (expand-file-name ".emacs-persistent-scratch" dotfiles-dir)
-    "Location of *scratch* file contents for persistent-scratch.")
+(req-package persistent-scratch
+             :defer t
+             :init
+             (progn
+               (persistent-scratch-setup-default)
+               ))
 
-(defun save-persistent-scratch ()
-  "Write the contents of *scratch* to the file name
-  PERSISTENT-SCRATCH-FILENAME"
+(defun my/set-scratch-as-text ()
   (with-current-buffer (get-buffer "*scratch*")
-    (write-region (point-min) (point-max)
-                  persistent-scratch-filename)))
+    (let ((mode "text-mode"))
+      (message "Setting scratch to text-mode")
+      (funcall (intern mode)))))
 
-(defun load-persistent-scratch ()
-  "Load the contents of PERSISTENT-SCRATCH-FILENAME into the
-  scratch buffer, clearing its contents first."
-  (if (file-exists-p persistent-scratch-filename)
-      (with-current-buffer (get-buffer "*scratch*")
-        (delete-region (point-min) (point-max))
-        (shell-command (format "cat %s" persistent-scratch-filename) (current-buffer)))))
+(defadvice persistent-scratch-restore (after advice-persistent-scratch-restore activate)
+  (my/set-scratch-as-text))
 
-(load-persistent-scratch)
-
-(push #'save-persistent-scratch kill-emacs-hook)
+;; yas-reload-all unfortunately triggers `persistent-scratch-setup-default`
+;; again, resetting the scratch to fundamental-mode, so advising here too.
+;; (defadvice yas-reload-all (after advice-yas-reload-all activate)
+;;  (my/set-scratch-as-text))
 #+END_SRC
 
 *** Persist certain buffers
@@ -753,6 +765,10 @@ file of a buffer in an external program."
                     buffer-file-name))))
 #+END_SRC
 
+*** Reveal in Finder
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package reveal-in-osx-finder)
+#+END_SRC
 *** Rename File and Buffer
 
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -831,6 +847,18 @@ Clean whitespace intelligently on save
              :init (global-whitespace-cleanup-mode))
 #+END_SRC
 
+*** Deletion
+Make the dired function `delete-by-moving-to-trash` work correctly on OS X
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package osx-trash
+			 :diminish ""
+             :init 
+             (progn
+               (when (eq system-type 'darwin)
+                 (osx-trash-setup))
+               (setq delete-by-moving-to-trash t)
+               ))
+#+END_SRC
 ** Navigation
 *** Minibuffer Shortcuts
 When selecting a file to visit, // will mean /
@@ -849,7 +877,7 @@ and ~ will mean $HOME regardless of preceding text
              (progn
                (recentf-mode 1)
                (setq recentf-max-save-items 500
-                     recentf-max-menu-items 50)
+                     recentf-max-menu-items 100)
                (add-to-list 'recentf-exclude "ido\\.last\\'")
                (recentf-cleanup)
              ))
@@ -976,6 +1004,29 @@ KEYBINDING: "C-H-j"
                ))
 #+END_SRC
 
+*** Bookmarks
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package bm
+             :diminish ""
+             :bind (("C-b m" . bm-toggle)
+                    ("C-b n" . bm-next)
+                    ("C-b p" . bm-previous)
+                    ("H->" . bm-next)
+                    ("H-<" . bm-previous)))
+#+END_SRC
+*** Jump-to-definition
+#+begin_src emacs-lisp :tangle yes
+(req-package dumb-jump
+             :diminish ""
+             :defer t
+             :bind (("H-j" . dumb-jump-go)
+                    ("H-S-j" . dumb-jump-back)
+                    ("H-M-j" . dumb-jump-quick-look))
+             :init
+             (progn
+               (setq dumb-jump-default-project "~/Projects")))
+#+END_SRC
+
 ** Editing
 *** Showing changes
 Highlight changes to the buffer caused by commands such as ‘undo’, ‘yank’/’yank-pop’, etc.
@@ -996,6 +1047,10 @@ Since I generally develop with languages that adhere to the "off-side" rule
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (setq-default indent-tabs-mode nil)
+#+END_SRC
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(electric-indent-mode +1)
 #+END_SRC
 
 Set tab width to 4 for all buffers
@@ -1118,8 +1173,7 @@ Transient-mark-mode needs to be reenabled after enabling CUA-mode
 Unfill functions providing the inverse of fill-paragraph and fill-region
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(req-package unfill
-             :init (setq-default fill-column 80))
+(req-package unfill)
 #+END_SRC
 
 *** Browse Kill Ring
@@ -1169,6 +1223,16 @@ so install visual-regexp-steroids to use Python's regex model.
                     ("C-c q" . vr/query-replace)
                     ("C-r" . vr/isearch-backward)
                     ("C-s" . vr/isearch-forward)))
+#+END_SRC
+
+*** Occur
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package occur-x
+  :init 
+    (progn
+      (setq occur-linenumbers-in-margin 1)
+      (add-hook 'occur-mode-hook 'turn-on-occur-x-mode)
+      ))
 #+END_SRC
 
 ** Windows
@@ -1254,6 +1318,11 @@ Add font styles to DONE lines.
              :init (global-whitespace-cleanup-mode t))
 #+END_SRC
 
+*** Dash
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package dash-at-point)
+#+END_SRC
+
 *** Flycheck
 
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1289,39 +1358,95 @@ A hydra for testing with nose.
 Install elpy for working with Python, with the =jedi= backend, and nose.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
+#+END_SRC
 (req-package elpy
-             :require (nose)
-             :defer t
              :init
              (progn
                (setq elpy-rpc-backend "jedi")
-               (elpy-enable)
-               (when (executable-find "ipython")
-                 (elpy-use-ipython))
-               (nose-mode t)
-               (bind-keys :map elpy-mode-map
-                          ("M-<left>" . nil)
-                          ("M-<right>" . nil)
-                          ("C-M-<left>" . elpy-nav-indent-shift-left)
-                          ("C-M-<right>" . elpy-nav-indent-shift-right)
-                          ("C-c n" . hydra-nosetest/body))
               ))
-#+END_SRC
+
+               # ; (setq python-fill-docstring-style 'symmetric)
+#                ;(when (executable-find "ipython")
+#                ;  (elpy-use-ipython))
+#                ;(nose-mode t)
+#                ;(bind-keys :map elpy-mode-map
+#                ;           ("M-<left>" . nil)
+#                ;           ("M-<right>" . nil)
+#                ;           ("C-M-<left>" . elpy-nav-indent-shift-left)
+#                ;           ("C-M-<right>" . elpy-nav-indent-shift-right)
+#                ;           ("C-c n" . hydra-nosetest/body))
+
+# TODO: add `python-docstring-mode` to requirements for elpy
+#              :require (nose)
 
 Enable company mode auto-completion backend for python, and some
 custom key-bindings
 
+(defun python-backtab ()
+  (interactive)
+  (if mark-active
+      (let (deactivate-mark)
+        (python-indent-shift-left (region-beginning) (region-end)))))
+
+(defun python-tab ()
+  (interactive)
+  (if mark-active
+      (let (deactivate-mark)
+        (python-indent-shift-right (region-beginning) (region-end)))
+    (indent-for-tab-command)))
+
+(defun python-backtab ()
+  (interactive)
+  (if mark-active
+      (let (deactivate-mark)
+        (python-indent-shift-left (region-beginning) (region-end)))))
+
+(defun python-tab ()
+  (interactive "^")
+  (python-indent-shift-right 1)
+  (back-to-indentation))
+
+(defadvice python-indent-shift-right (after python-indent-shift-right activate)
+  (back-to-indentation))
+
+
 #+BEGIN_SRC emacs-lisp :tangle yes
+(defun pyfile-overview ()
+  (interactive)
+  (occur "class \\\|def "))
+
 (defun my/python-mode-hook ()
-  (with-eval-after-load 'company-mode
-    (bind-keys :map elpy-mode-map
-               ("<tab>" . python-indent-shift-right)
-               ("S-<tab>" . python-indent-shift-left))
-    (add-to-list 'company-backends 'company-jedi)
-    (company-mode)
-    ))
+  (elpy-enable)
+  (bind-keys :map python-mode-map
+             ("<tab>" . elpy-nav-indent-shift-right)
+             ("<backtab>" . elpy-nav-indent-shift-left)))
 (add-hook 'python-mode-hook 'my/python-mode-hook)
 #+END_SRC
+
+  (elpy-enable)
+  (with-eval-after-load 'company-mode
+    (add-to-list 'company-backends 'company-jedi)
+    (company-mode)))
+
+  # ;(with-eval-after-load 'company-mode
+  #   ;(bind-keys :map elpy-mode-map
+  #   ;           ("<tab>" . python-indent-shift-right)
+  #   ;           ("S-<tab>" . python-indent-shift-left))
+  #   ;(add-to-list 'company-backends 'company-jedi)
+  #   ;(company-mode)
+  #   ;(python-docstring-mode)
+  #   ;
+  #   ;))
+
+  # (bind-keys :map python-mode-map
+  #            ("M-<left>" . nil)
+  #            ("M-<right>" . nil)
+  #            ("C-M-<left>" . elpy-nav-indent-shift-left)
+  #            ("C-M-<right>" . elpy-nav-indent-shift-right)
+  #            ("<tab>" . elpy-nav-indent-shift-right)
+  #            ("<backtab>" . elpy-nav-indent-shift-left)))
+
+  # (setq electric-indent-chars (delq ?: electric-indent-chars))
 
 I occasionally use Jinja for templating, so let's add that mode too.
 
@@ -1459,13 +1584,19 @@ Adding elm for front-end stuff
 #+END_SRC
 
 **** Utilities
+***** YASnippet
+disabled for now
+#+BEGIN_SRC emacs-lisp :tangle yes
+#+END_SRC
+(req-package yasnippet
+             :init (yas-global-mode 1))
+
 ***** Mocha (Testing)
 Add the ability to run tests from emacs. Also add some snippets to make writing tests quicker.
-#+BEGIN_SRC emacs-lisp :tangle yes
-(req-package mocha
-             :requires (mocha-snippets)
-             :defer t)
-#+END_SRC
+#-+BEGIN_SRC emacs-lisp :tangle yes
+;(req-package mocha
+;             :requires (mocha-snippets))
+#-+END_SRC
 ** Markup
 *** Sass/Scss
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1541,3 +1672,4 @@ don't trigger the gc, so tools like flx won't pause.
 (add-hook 'minibuffer-setup-hook #'my-minibuffer-setup-hook)
 (add-hook 'minibuffer-exit-hook #'my-minibuffer-exit-hook)
 #+END_SRC
+

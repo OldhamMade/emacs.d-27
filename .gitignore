@@ -94,3 +94,6 @@ var/
 # this is generated from config.org,
 # so shouldn't be persisted
 config.el  
+
+# Hide scratch
+.persistent-scratch

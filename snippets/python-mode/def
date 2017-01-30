@@ -1,0 +1,23 @@
+# -*- mode: snippet -*-
+# name: def
+# key: def
+# --
+def ${1:name}($2):
+    \"\"\"
+    ${3:TODO add description}
+    ${2:$(python-args-to-google-docstring yas-text t)}
+
+    ${5:Returns:
+            $6
+}
+    ${7:Yields:
+            $8
+}
+    ${9:Raises:
+            $10
+}\"\"\"
+    ${0:$$(let ((beg yas-snippet-beg)
+                (end yas-snippet-end))
+        (yas-expand-snippet
+          (buffer-substring-no-properties beg end) beg end
+              (quote ((yas-indent-line nil) (yas-wrap-around-region nil)))))}
