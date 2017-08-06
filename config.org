@@ -886,7 +886,7 @@ and ~ will mean $HOME regardless of preceding text
 *** IDO
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(req-package ido-ubiquitous
+(req-package ido-completing-read+
              :require (ido recentf)
              :init
              (progn
@@ -1482,6 +1482,15 @@ Adding Alchemist for elixir programming.
                  nil)
             (ruby-end-mode 1)))
 #+END_SRC
+**** Erlang
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package erlang-mode
+             :requires (company-erlang)
+             :defer t
+             :mode ("\\.erl\\'" . erlang-mode))
+#+END_SRC
+
 **** Haskell
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package haskell-mode
