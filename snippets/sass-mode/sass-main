@@ -1,0 +1,8 @@
+# -*- mode: snippet -*-
+# name: Sass main
+# key: sass-main
+# --
+@import reset
+
+body:
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"

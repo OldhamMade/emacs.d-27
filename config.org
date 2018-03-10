@@ -26,15 +26,15 @@ And many others...
 
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-  ;; (setq debug-on-error t)
-  (require 'cl)
-  (require 'org)
-  (defun export-init-org ()
-    "Generate init.html and init.html from the current init.org file."
-    (interactive)
-    (call-interactively 'org-babel-tangle)
-    (call-interactively 'org-export-as-html)
-    (call-interactively 'org-md-export-to-markdown))
+(setq debug-on-error t)
+(require 'cl)
+(require 'org)
+(defun export-init-org ()
+  "Generate init.html and init.html from the current init.org file."
+  (interactive)
+  (call-interactively 'org-babel-tangle)
+  (call-interactively 'org-export-as-html)
+  (call-interactively 'org-md-export-to-markdown))
 #+END_SRC
 
 ** Licensing
@@ -50,6 +50,11 @@ These are items I'm considering adding at a later date:
 - https://github.com/nschum/highlight-symbol.el
 - http://ternjs.net
 - https://www.emacswiki.org/emacs/HideShow and https://www.emacswiki.org/emacs/download/hideshowvis.el
+
+Crystal yasnippets:
+ms - macro statement
+mp - macro print
+md - macro debug
 
 ** Tried and removed
 *** Agressive Indent
@@ -154,56 +159,112 @@ Stop warnings
 #+END_SRC
 
 ** Package Management
+*** Custom config
+
+I don't like how package details are written to init.el,
+so I stop that from happening with the following override:
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun package--save-selected-packages (&rest opt) nil)
+#+END_SRC
+
 *** Sources
 
 I use ELPA packages heavily for functionality, primarily the MELPA and Marmalade
 repositories. Initalize all the package repos here, so we can use them later.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
+(setq package-enable-at-startup nil)
+(setq package-archives '(("gnu" . "https://elpa.gnu.org/packages/")
+                         ("melpa" . "https://melpa.org/packages/")
+                         ("melpa-stable" . "https://stable.melpa.org/packages/")
+                         ("org" . "https://orgmode.org/elpa/")
+                         ("marmalade" . "https://marmalade-repo.org/packages/")))
+
 (require 'package)
-(add-to-list 'package-archives '("melpa" . "https://melpa.milkbox.net/packages/") t)
-(add-to-list 'package-archives '("marmalade" . "https://marmalade-repo.org/packages/") t)
-(add-to-list 'package-archives '("gnu" . "https://elpa.gnu.org/packages/") t)
-(package-initialize)
 #+END_SRC
 
 Update the local package database if needed before installing packages
-#+BEGIN_SRC emacs-lisp :tangle yes
-(defadvice package-install (before maybe-refresh-packages activate)
-  (unless (or (called-interactively-p) (assq (ad-get-arg 0) package-archive-contents))
-    (unless package--initialized
-      (package-initialize t))
-    (unless (and package-archive-contents (assq (ad-get-arg 0) package-archive-contents))
-      (package-refresh-contents))))
-#+END_SRC
+# +BEGIN_SRC emacs-lisp :tangle yes
+#(defadvice package-install (before maybe-refresh-packages activate)
+#  (unless (or (called-interactively-p) (assq (ad-get-arg 0) package-archive-contents))
+#    (unless package--initialized
+#      (package-initialize t))
+#    (unless (and package-archive-contents (assq (ad-get-arg 0) package-archive-contents))
+#      (package-refresh-contents))))
+# +END_SRC
 
 *** =req-package=
 
 =req-package= is a macro wrapper on top of use-package. It's goal is to simplify
 package dependencies management.
 
-#+BEGIN_SRC emacs-lisp :tangle yes
 (unless (package-installed-p 'req-package)
   (package-install 'req-package))
 (package-initialize)
-(require 'req-package)
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+
+(defun require-package (package)
+  "refresh package archives, check package presence and install if it's not installed"
+  (if (null (require package nil t))
+      (progn (let* ((ARCHIVES (if (null package-archive-contents)
+                                  (progn (package-refresh-contents)
+                                         package-archive-contents)
+                                package-archive-contents))
+                    (AVAIL (assoc package ARCHIVES)))
+               (if AVAIL
+                   (package-install package)))
+             (require package))))
+             
+(require-package 'use-package)
+(require 'use-package)
+(setq use-package-always-ensure t)
+
+(add-to-list 'load-path "~/.emacs.d/el-get/el-get")
+(require-package 'el-get)
+(require 'el-get)
+(add-to-list 'el-get-recipe-path "~/.emacs.d/el-get/el-get/recipes")
+(el-get 'sync)
+
+(use-package use-package-el-get
+  :config (use-package-el-get-setup))
+  
+(use-package use-package-chords)
+  
+(use-package req-package
+  :config (req-package--log-set-level 'debug))
+
 #+END_SRC
+
+(require-package 'req-package)
+(require 'req-package)
+
+(setq req-package-log-level 'trace)
+(req-package el-get ;; prepare el-get (optional)
+  :force t ;; load package immediately, no dependency resolution
+  :config
+  (add-to-list 'el-get-recipe-path "~/.emacs.d/el-get/el-get/recipes")
+  (el-get 'sync))
 
 Automatically keep packages up to date.
 
-#+BEGIN_SRC emacs-lisp :tangle yes
+# +BEGIN_SRC emacs-lisp :tangle yes
 (req-package auto-package-update
-             :init (auto-package-update-maybe))
-#+END_SRC
+  :ensure t
+  :force true
+  :config (auto-package-update-maybe))
+# +END_SRC
 
 This package also provides =bind-key=, which is really useful for managing
 keybindings.
 
-*** Diminish
-diminish hides or abbreviates minor mode indicators in the modeline
+*** Delight
+delight hides or abbreviates minor mode indicators in the modeline
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(req-package diminish)
+(req-package delight
+  :ensure t)
 #+END_SRC
 
 ** Interface
@@ -212,7 +273,7 @@ diminish hides or abbreviates minor mode indicators in the modeline
 I prefer a smaller font, to get more text onto the screen.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(set-face-attribute 'default nil :font "Meslo LG L DZ for Powerline:pixelsize=10:weight=normal:slant=normal:width=normal:spacing=100:scalable=true")
+(set-face-attribute 'default nil :font "SFMono Nerd Font:pixelsize=10:weight=normal:slant=normal:width=normal:spacing=100:scalable=true")
 #+END_SRC
 
 I prefer darker themes as they're easier on my eyes, so I created one:
@@ -228,13 +289,12 @@ Turn line-numbers on everywhere.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package hlinum
-             :init
-             (progn
-               (global-linum-mode 1)
-               (setq linum-format "%4d\u2595")
-               (setq column-number-mode 1)
-               (hlinum-activate)
-               ))
+  :config
+    (global-linum-mode 1)
+    (setq linum-format "%4d\u2595")
+    (setq column-number-mode 1)
+    (hlinum-activate)
+    )
 #+END_SRC
 
 Allow clicking the line-numbers to select the line(s)
@@ -274,19 +334,12 @@ Allow clicking the line-numbers to select the line(s)
            ("<left-margin> <drag-mouse-1>" . mu-select-linum))
 #+END_SRC
 
-*** Seeing changes when working with Git
+*** Seeing changes when working with VC
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(req-package git-gutter-fringe+
-             :init
-             (progn
-               (require 'git-gutter-fringe+)
-               (global-git-gutter+-mode)
-               (git-gutter-fr+-minimal)
-               (setq-default left-fringe-width  16
-                             right-fringe-width 16)
-               (eval-after-load "git-gutter+" '(diminish 'git-gutter+-mode))
-               ))
+(req-package diff-hl
+  :config
+    (global-diff-hl-mode 1))
 #+END_SRC
 
 *** Recursive Editing
@@ -296,32 +349,33 @@ usage. This means that when the minibuffer is active we can still call
 commands that require the minibuffer.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-  (setq enable-recursive-minibuffers t)
+(setq enable-recursive-minibuffers t)
 #+END_SRC
 
 It's easy to lose track of whether we're in a recursive minibuffer or
 not. We display the recursion level in the minibuffer to avoid confusion.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-  (minibuffer-depth-indicate-mode 1)
+(minibuffer-depth-indicate-mode 1)
 #+END_SRC
-
 *** Uniquify buffer names
 
-#+BEGIN_SRC emacs-lisp :tangle yes
+@FIXME
+# +BEGIN_SRC emacs-lisp :tangle yes
 (req-package uniquify
-             :init
-             (progn
-                (setq uniquify-buffer-name-style 'forward)
-                ))
-#+END_SRC
+  :config
+     (setq uniquify-buffer-name-style 'forward)
+     )
+# +END_SRC
 
 *** Modeline
 I prefer the cleaner Powerline to the usual modeline.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package powerline
-             :init (powerline-default-theme))
+  :defer t
+  :config
+  (powerline-default-theme))
 #+END_SRC
 
 Reduce the amount of rubbish in the modeline...
@@ -335,7 +389,8 @@ Reduce the amount of rubbish in the modeline...
 *** Find convenient unbound keystrokes
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(req-package unbound)
+(req-package unbound
+  :defer t)
 #+END_SRC
 
 ** Key bindings
@@ -451,15 +506,14 @@ generally be activated accidentally during typing (I type quite fast).
   (key-chord-define-global "bn" 'bm-next)
   (key-chord-define-global "bv" 'bm-previous)
   (key-chord-define-global "d3" 'dash-at-point)
-  (key-chord-define-global "R$" 'rgrep)
+  (key-chord-define-global "R$" 'ag-regexp)
+  (key-chord-define-global "m;" 'multiple-cursors-hydra/body)
 )
 (req-package key-chord
-             :defer t
-             :init
-             (progn
-               (key-chord-mode 1)
-               (my/key-chord-mode-hook)
-               ))
+  :force true
+  :config
+    (key-chord-mode 1)
+    (my/key-chord-mode-hook))
 #+END_SRC
 
 *** Hydra
@@ -467,22 +521,36 @@ Hydra is a package that can be used to tie related commands
 into a family of short bindings with a common prefix.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(req-package 'hydra)
+(req-package hydra
+  :force true)
 #+END_SRC
 
 ** Auto-completion (Company mode)
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package company-quickhelp
-             :requires (company-mode company-jedi)
-             :defer t
-             :init
-             (progn
-               (global-company-mode 1)
-               (company-quickhelp-mode 1)
-               (setq company-idle-delay 0.2)
-               (bind-key "\t" 'company-complete-common company-mode-map)
-               ))
+  :requires (company-mode)
+  :config
+  (progn
+    (global-company-mode 1)
+    (company-quickhelp-mode 1)
+    (setq company-idle-delay 0.2)
+    ; (bind-key "\t" 'company-complete-common company-mode-map)
+    (define-key company-active-map "\t" 'company-yasnippet-or-completion)
+    ))
+
+(add-hook 'after-init-hook 'global-company-mode)
+
+(defun company-yasnippet-or-completion ()
+  (interactive)
+  (if (yas/expansion-at-point)
+      (progn (company-abort)
+             (yas/expand))
+    (company-complete-common)))
+
+(defun yas/expansion-at-point ()
+  "Tested with v0.6.1. Extracted from `yas/expand-1'"
+    (first (yas/current-key)))
 #+END_SRC
 
 ** Highlighting
@@ -498,24 +566,23 @@ Turn syntax highlighting on by default
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package highlight-indentation
-			 :config (set-face-background 'highlight-indentation-face "#222")
-             :init
-             (progn
-               (add-hook 'prog-mode-hook 'highlight-indentation-mode)
-               (add-hook 'yaml-mode-hook 'highlight-indentation-mode)
-               ))
+  :config
+    (set-face-background 'highlight-indentation-face "#222")
+    (add-hook 'prog-mode-hook 'highlight-indentation-mode)
+    (add-hook 'yaml-mode-hook 'highlight-indentation-mode)
+    )
 #+END_SRC
 
 *** Highlight delimiters
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package rainbow-delimiters
-             :diminish ""
-             :init
-             (progn
-               (add-hook 'prog-mode-hook 'rainbow-delimiters-mode)
-               (add-hook 'sass-mode-hook 'rainbow-delimiters-mode)
-               ))
+  :diminish ""
+  :config
+  (progn
+    (add-hook 'prog-mode-hook 'rainbow-delimiters-mode)
+    (add-hook 'sass-mode-hook 'rainbow-delimiters-mode)
+    ))
 #+END_SRC
 
 *** Highlight variables
@@ -525,43 +592,36 @@ easier to visually search
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package rainbow-identifiers
-			 :init (add-hook 'prog-mode-hook 'rainbow-identifiers-mode))
+  :config
+  (progn
+    (add-hook 'prog-mode-hook (lambda ()
+                   (unless (eq major-mode 'js2-mode)
+                     (rainbow-identifiers-mode))))
+    ))
 #+END_SRC
-
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package column-enforce-mode
-			 :diminish column-enforce-mode
-             :init
-             (progn
-               (add-hook 'python-mode-hook 'column-enforce-mode)
-               (add-hook 'alchemist-mode-hook 'column-enforce-mode)
-               ))
+  :diminish column-enforce-mode
+  :config
+  (progn
+    (add-hook 'python-mode-hook 'column-enforce-mode)
+    (add-hook 'alchemist-mode-hook 'column-enforce-mode)
+    ))
 #+END_SRC
 
 *** Highlight colour references with it's colour
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package rainbow-mode
-             :defer t
-             :init
-             (progn
-               (add-hook 'clevercss-mode-hook 'rainbow-mode)
-               (add-hook 'less-mode-hook 'rainbow-mode)
-               (add-hook 'css-mode-hook 'rainbow-mode)
-               (add-hook 'css-mode-hook 'rainbow-mode)
-               (add-hook 'emacs-lisp-mode-hook 'rainbow-mode)
-               ))
-#+END_SRC
-
-*** Highlight fill-column
-
-#+BEGIN_SRC emacs-lisp :tangle yes
-(setq-default fci-rule-column 79)
-(setq-default fci-rule-character-color "red3")
-(setq fci-rule-width 1)
-(setq fci-rule-color "gray10")
-(add-hook 'after-change-major-mode-hook 'fci-mode)
+  :config
+  (progn
+    (add-hook 'clevercss-mode-hook 'rainbow-mode)
+    (add-hook 'less-mode-hook 'rainbow-mode)
+    (add-hook 'css-mode-hook 'rainbow-mode)
+    (add-hook 'css-mode-hook 'rainbow-mode)
+    (add-hook 'emacs-lisp-mode-hook 'rainbow-mode)
+    ))
 #+END_SRC
 
 ** Buffers
@@ -589,11 +649,10 @@ Now let's make the *scratch* buffer persistent across sessions
 
 #+BEGIN_SRC  emacs-lisp :tangle yes
 (req-package persistent-scratch
-             :defer t
-             :init
-             (progn
-               (persistent-scratch-setup-default)
-               ))
+  :config
+  (progn
+    (persistent-scratch-setup-default)
+    ))
 
 (defun my/set-scratch-as-text ()
   (with-current-buffer (get-buffer "*scratch*")
@@ -650,6 +709,11 @@ Bury certain buffers instead of kill them
 #+END_SRC
 
 *** Switching buffers
+**** Using cursor keys
+
+CMD + "up"/"down" feel quite natural to me for switching
+between buffers
+
 #+BEGIN_SRC emacs-lisp :tangle yes
 (defun custom-ignore-buffer (str)
   (or
@@ -708,6 +772,60 @@ Bury certain buffers instead of kill them
 (bind-key "H-<up>" 'custom-next-buffer)
 #+END_SRC
 
+**** "Other" buffers using Hydra
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun my/name-of-buffers (n)
+  "Return the names of the first N buffers from `buffer-list'."
+  (let ((bns
+         (delq nil
+               (mapcar
+                (lambda (b)
+                  (unless (string-match "^ " (setq b (buffer-name b)))
+                    b))
+                (buffer-list)))))
+    (subseq bns 1 (min (1+ n) (length bns)))))
+
+;; Given ("a", "b", "c"), return "1. a, 2. b, 3. c".
+(defun my/number-names (list)
+  "Enumerate and concatenate LIST."
+  (let ((i 0))
+    (mapconcat
+     (lambda (x)
+       (format "%d. %s" (cl-incf i) x))
+     list
+     "\n  ")))
+
+(defvar my/last-buffers nil)
+
+(defun my/switch-to-buffer (arg)
+  (interactive "p")
+  (switch-to-buffer
+   (nth (1- arg) my/last-buffers)))
+
+(defun my/switch-to-buffer-other-window (arg)
+  (interactive "p")
+  (switch-to-buffer-other-window
+   (nth (1- arg) my/last-buffers)))
+
+(defhydra hydra-switch-to-buffer 
+  (:exit t
+   :body-pre (setq my/last-buffers
+                   (my/name-of-buffers 4)))
+   "
+other buffers: 
+  %s(my/number-names my/last-buffers)
+
+"
+   ("o" my/switch-to-buffer "1 in this window")
+   ("2" (my/switch-to-buffer 2))
+   ("3" (my/switch-to-buffer 3))
+   ("4" (my/switch-to-buffer 4))
+   ("O" my/switch-to-buffer-other-window "1 in other window")
+   ("<escape>" nil))
+
+(global-set-key "\C-o" 'hydra-switch-to-buffer/body)
+#+END_SRC
+
 *** Copy buffer path to kill ring
 
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -734,7 +852,168 @@ Bury certain buffers instead of kill them
     ))
 #+END_SRC
 
+*** Display ibuffer menu commands
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defhydra hydra-ibuffer-main (:color pink :hint nil)
+  "
+ ^Navigation^ | ^Mark^        | ^Actions^        | ^View^
+-^----------^-+-^----^--------+-^-------^--------+-^----^-------
+  _k_:    ʌ   | _m_: mark     | _D_: delete      | _g_: refresh
+ _RET_: visit | _u_: unmark   | _S_: save        | _s_: sort
+  _j_:    v   | _*_: specific | _a_: all actions | _/_: filter
+-^----------^-+-^----^--------+-^-------^--------+-^----^-------
+"
+  ("j" ibuffer-forward-line)
+  ("RET" ibuffer-visit-buffer :color blue)
+  ("k" ibuffer-backward-line)
+
+  ("m" ibuffer-mark-forward)
+  ("u" ibuffer-unmark-forward)
+  ("*" hydra-ibuffer-mark/body :color blue)
+
+  ("D" ibuffer-do-delete)
+  ("S" ibuffer-do-save)
+  ("a" hydra-ibuffer-action/body :color blue)
+
+  ("g" ibuffer-update)
+  ("s" hydra-ibuffer-sort/body :color blue)
+  ("/" hydra-ibuffer-filter/body :color blue)
+
+  ("o" ibuffer-visit-buffer-other-window "other window" :color blue)
+  ("q" quit-window "quit ibuffer" :color blue)
+  ("." nil "toggle hydra" :color blue))
+
+(defhydra hydra-ibuffer-mark (:color teal :columns 5
+                              :after-exit (hydra-ibuffer-main/body))
+  "Mark"
+  ("*" ibuffer-unmark-all "unmark all")
+  ("M" ibuffer-mark-by-mode "mode")
+  ("m" ibuffer-mark-modified-buffers "modified")
+  ("u" ibuffer-mark-unsaved-buffers "unsaved")
+  ("s" ibuffer-mark-special-buffers "special")
+  ("r" ibuffer-mark-read-only-buffers "read-only")
+  ("/" ibuffer-mark-dired-buffers "dired")
+  ("e" ibuffer-mark-dissociated-buffers "dissociated")
+  ("h" ibuffer-mark-help-buffers "help")
+  ("z" ibuffer-mark-compressed-file-buffers "compressed")
+  ("b" hydra-ibuffer-main/body "back" :color blue))
+
+(defhydra hydra-ibuffer-action (:color teal :columns 4
+                                :after-exit
+                                (if (eq major-mode 'ibuffer-mode)
+                                    (hydra-ibuffer-main/body)))
+  "Action"
+  ("A" ibuffer-do-view "view")
+  ("E" ibuffer-do-eval "eval")
+  ("F" ibuffer-do-shell-command-file "shell-command-file")
+  ("I" ibuffer-do-query-replace-regexp "query-replace-regexp")
+  ("H" ibuffer-do-view-other-frame "view-other-frame")
+  ("N" ibuffer-do-shell-command-pipe-replace "shell-cmd-pipe-replace")
+  ("M" ibuffer-do-toggle-modified "toggle-modified")
+  ("O" ibuffer-do-occur "occur")
+  ("P" ibuffer-do-print "print")
+  ("Q" ibuffer-do-query-replace "query-replace")
+  ("R" ibuffer-do-rename-uniquely "rename-uniquely")
+  ("T" ibuffer-do-toggle-read-only "toggle-read-only")
+  ("U" ibuffer-do-replace-regexp "replace-regexp")
+  ("V" ibuffer-do-revert "revert")
+  ("W" ibuffer-do-view-and-eval "view-and-eval")
+  ("X" ibuffer-do-shell-command-pipe "shell-command-pipe")
+  ("b" nil "back"))
+
+(defhydra hydra-ibuffer-sort (:color amaranth :columns 3)
+  "Sort"
+  ("i" ibuffer-invert-sorting "invert")
+  ("a" ibuffer-do-sort-by-alphabetic "alphabetic")
+  ("v" ibuffer-do-sort-by-recency "recently used")
+  ("s" ibuffer-do-sort-by-size "size")
+  ("f" ibuffer-do-sort-by-filename/process "filename")
+  ("m" ibuffer-do-sort-by-major-mode "mode")
+  ("b" hydra-ibuffer-main/body "back" :color blue))
+
+(defhydra hydra-ibuffer-filter (:color amaranth :columns 4)
+  "Filter"
+  ("m" ibuffer-filter-by-used-mode "mode")
+  ("M" ibuffer-filter-by-derived-mode "derived mode")
+  ("n" ibuffer-filter-by-name "name")
+  ("c" ibuffer-filter-by-content "content")
+  ("e" ibuffer-filter-by-predicate "predicate")
+  ("f" ibuffer-filter-by-filename "filename")
+  (">" ibuffer-filter-by-size-gt "size")
+  ("<" ibuffer-filter-by-size-lt "size")
+  ("/" ibuffer-filter-disable "disable")
+  ("b" hydra-ibuffer-main/body "back" :color blue))
+
+(add-hook 'after-init-hook
+  (lambda ()
+    (define-key ibuffer-mode-map "." 'hydra-ibuffer-main/body)))
+#+END_SRC
+
 ** Files
+*** Dired
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(add-hook 'dired-mode-hook 'diff-hl-dired-mode-unless-remote)
+#+END_SRC
+
+A useful Hydra to provide tips, bound to "." (same as ibuffer).
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defhydra hydra-dired (:hint nil :color pink)
+  "
+_+_ mkdir          _v_iew           _m_ark             _(_ details        _i_nsert-subdir    wdired
+_C_opy             _O_ view other   _U_nmark all       _)_ omit-mode      _$_ hide-subdir    C-x C-q : edit
+_D_elete           _o_pen other     _u_nmark           _l_ redisplay      _w_ kill-subdir    C-c C-c : commit
+_R_ename           _M_ chmod        _t_oggle           _g_ revert buf     _e_ ediff          C-c ESC : abort
+_Y_ rel symlink    _G_ chgrp        _E_xtension mark   _s_ort             _=_ pdiff
+_S_ymlink          ^ ^              _F_ind marked      _._ toggle hydra   \\ flyspell
+_r_sync            ^ ^              ^ ^                ^ ^                _?_ summary
+_z_ compress-file  _A_ find regexp
+_Z_ compress       _Q_ repl regexp
+
+T - tag prefix
+"
+  ("\\" dired-do-ispell)
+  ("(" dired-hide-details-mode)
+  (")" dired-omit-mode)
+  ("+" dired-create-directory)
+  ("=" diredp-ediff)         ;; smart diff
+  ("?" dired-summary)
+  ("$" diredp-hide-subdir-nomove)
+  ("A" dired-do-find-regexp)
+  ("C" dired-do-copy)        ;; Copy all marked files
+  ("D" dired-do-delete)
+  ("E" dired-mark-extension)
+  ("e" dired-ediff-files)
+  ("F" dired-do-find-marked-files)
+  ("G" dired-do-chgrp)
+  ("g" revert-buffer)        ;; read all directories again (refresh)
+  ("i" dired-maybe-insert-subdir)
+  ("l" dired-do-redisplay)   ;; relist the marked or singel directory
+  ("M" dired-do-chmod)
+  ("m" dired-mark)
+  ("O" dired-display-file)
+  ("o" dired-find-file-other-window)
+  ("Q" dired-do-find-regexp-and-replace)
+  ("R" dired-do-rename)
+  ("r" dired-do-rsynch)
+  ("S" dired-do-symlink)
+  ("s" dired-sort-toggle-or-edit)
+  ("t" dired-toggle-marks)
+  ("U" dired-unmark-all-marks)
+  ("u" dired-unmark)
+  ("v" dired-view-file)      ;; q to exit, s to search, = gets line #
+  ("w" dired-kill-subdir)
+  ("Y" dired-do-relsymlink)
+  ("z" diredp-compress-this-file)
+  ("Z" dired-do-compress)
+  ("q" nil)
+  ("." nil :color blue))
+
+(define-key dired-mode-map "." 'hydra-dired/body)
+#+END_SRC
+
 *** Copy Filename to Clipboard
 
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -821,14 +1100,26 @@ Always reload the file on disk when it updates
 Autosaving of files
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(setq auto-save-file-name-transforms `((".*" , "~/.emacs.d/auto-save" t)))
+(setq auto-save-file-name-transforms `((".*" ,"~/.emacs.d/auto-backup" t)))
 #+END_SRC
 
 Backup files to a local directory.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(setq backup-by-copying t)
-(setq backup-directory-alist '(("" . "~/.emacs.d/auto-backup")))
+(setq
+   backup-by-copying t      ; don't clobber symlinks
+   backup-directory-alist
+    '(("." . "~/.emacs.d/auto-backup"))    ; don't litter my fs tree
+   delete-old-versions t
+   kept-new-versions 6
+   kept-old-versions 2
+   version-control t)       ; use versioned backups
+#+END_SRC
+
+Disable annoying lockfiles
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq create-lockfiles nil)
 #+END_SRC
 
 *** Saving
@@ -843,22 +1134,10 @@ Clean whitespace intelligently on save
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package whitespace-cleanup-mode
-			 :diminish whitespace-cleanup-mode
-             :init (global-whitespace-cleanup-mode))
+  :diminish whitespace-cleanup-mode
+  :config (global-whitespace-cleanup-mode))
 #+END_SRC
 
-*** Deletion
-Make the dired function `delete-by-moving-to-trash` work correctly on OS X
-#+BEGIN_SRC emacs-lisp :tangle yes
-(req-package osx-trash
-			 :diminish ""
-             :init 
-             (progn
-               (when (eq system-type 'darwin)
-                 (osx-trash-setup))
-               (setq delete-by-moving-to-trash t)
-               ))
-#+END_SRC
 ** Navigation
 *** Minibuffer Shortcuts
 When selecting a file to visit, // will mean /
@@ -873,42 +1152,43 @@ and ~ will mean $HOME regardless of preceding text
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package recentf
-             :init
-             (progn
-               (recentf-mode 1)
-               (setq recentf-max-save-items 500
-                     recentf-max-menu-items 100)
-               (add-to-list 'recentf-exclude "ido\\.last\\'")
-               (recentf-cleanup)
-             ))
+  :config
+  (progn
+    (recentf-mode 1)
+    (setq recentf-max-save-items 500
+          recentf-max-menu-items 100)
+    (add-to-list 'recentf-exclude "ido\\.last\\'")
+    (recentf-cleanup)
+  ))
 #+END_SRC
 
 *** IDO
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package ido-completing-read+
-             :require (ido recentf)
-             :init
-             (progn
-               (ido-mode t)
-               (setq ido-confirm-unique-completion nil)
-               (setq ido-create-new-buffer 'always)
-               (setq ido-enable-flex-matching t)
-               (setq ido-ignore-extensions t)
-               (setq ido-use-virtual-buffers t)
-               (ido-ubiquitous-mode 1)
-               ))
+  :force true
+  :require (ido recentf memoize)
+  :config
+  (progn
+    (ido-mode t)
+    (setq ido-confirm-unique-completion nil)
+    (setq ido-create-new-buffer 'always)
+    (setq ido-enable-flex-matching t)
+    (setq ido-ignore-extensions t)
+    (setq ido-use-virtual-buffers t)
+    (ido-ubiquitous-mode 1)
+    ))
 #+END_SRC
 
 Flx is rather useful, so let's add that too
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package flx-ido
-             :require flx
-             :init
-             (progn
-               (flx-ido-mode 1)
-               ))
+  :require flx
+  :config
+  (progn
+    (flx-ido-mode 1)
+    ))
 #+END_SRC
 
 Use ido for recently open files
@@ -930,9 +1210,9 @@ Improve M-x with recent/popular commands at prompt.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package smex
-             :bind (("M-x" . smex)
-                    ("M-X" . smex-major-mode-commands)
-                    ("C-c C-c M-x" . execute-extended-command)))
+  :bind (("M-x" . smex)
+         ("M-X" . smex-major-mode-commands)
+         ("C-c C-c M-x" . execute-extended-command)))
 #+END_SRC
 
 *** Projectile
@@ -942,11 +1222,10 @@ are seen as projects by default.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package projectile
-             :diminish ""
-             :init
-             (progn
-               (projectile-global-mode)
-               ))
+  :diminish ""
+  :config
+    (projectile-global-mode)
+    )
 #+END_SRC
 
 ** Moving Around
@@ -976,7 +1255,7 @@ the line. Repeated use of `C-a' toggles between these two positions.
 
 It can be rather handy to jump to the last changed area in a file.
 
-KEYBINDING: "M -"
+KEYBINDING: "H-M-<left>"
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package goto-last-change
@@ -987,21 +1266,22 @@ KEYBINDING: "M -"
 *** Avy
 Avy is a package for jumping to visible text using a char-based decision tree
 
-KEYBINDING: "C-H-j"
+KEYBINDING: "M-j"
 
 #+BEGIN_SRC emacs-lisp :tangle yes
+(defhydra hydra-avy (:color blue)
+  "avy-goto"
+  ("j" avy-goto-char "char")
+  ("k" avy-goto-char-2 "char-2")
+  ("l" avy-goto-line "line")
+  ("q" nil "quit"))
+
 (req-package avy
-             :diminish ""
-             :init
-             (progn
-               (defhydra hydra-avy (:color blue)
-                 "avy-goto"
-                 ("j" avy-goto-char "char")
-                 ("k" avy-goto-char-2 "char-2")
-                 ("l" avy-goto-line "line")
-                 ("q" nil "quit"))
-               (bind-key "C-H-j" 'hydra-avy/body)
-               ))
+  :require (hydra)
+  :diminish ""
+  :config
+    (global-set-key (kbd "M-j") 'avy-goto-char-2)
+    (global-set-key (kbd "M-s") 'avy-goto-word-1))
 #+END_SRC
 
 *** Bookmarks
@@ -1022,7 +1302,7 @@ KEYBINDING: "C-H-j"
              :bind (("H-j" . dumb-jump-go)
                     ("H-S-j" . dumb-jump-back)
                     ("H-M-j" . dumb-jump-quick-look))
-             :init
+             :config
              (progn
                (setq dumb-jump-default-project "~/Projects")))
 #+END_SRC
@@ -1037,7 +1317,7 @@ Note: disabled for now, as it interacts badly with cua-paste
 (req-package volatile-highlights
              :defer t
              :diminish volatile-highlights-mode
-             :init (volatile-highlights-mode t))
+             :config (volatile-highlights-mode t))
 #+END_SRC
 
 *** Tabs
@@ -1075,7 +1355,7 @@ simpler tree structure. It also allows us to visualize the tree directly.
 (req-package undo-tree
              :ensure undo-tree
              :diminish ""
-             :init (global-undo-tree-mode))
+             :config (global-undo-tree-mode))
 #+END_SRC
 
 *** CUA
@@ -1122,7 +1402,7 @@ Transient-mark-mode needs to be reenabled after enabling CUA-mode
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package autopair
              :diminish autopair-mode
-             :init
+             :config
              (progn
               (autopair-global-mode)
               (setq show-paren-delay 0
@@ -1182,14 +1462,14 @@ KEYBINDING: "M y"
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package browse-kill-ring
-             :init (browse-kill-ring-default-keybindings))
+             :config (browse-kill-ring-default-keybindings))
 #+END_SRC
 
 *** Remote editing via tramp
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package tramp
-             :init (setq tramp-default-method "ssh"))
+             :config (setq tramp-default-method "ssh"))
 #+END_SRC
 
 *** Expand region
@@ -1199,17 +1479,48 @@ KEYBINDING: "M y"
 
 *** Multiple Cursors
 #+BEGIN_SRC emacs-lisp :tangle yes
+(defhydra multiple-cursors-hydra (:hint nil)
+  "
+     ^Up^            ^Down^        ^Other^
+----------------------------------------------
+[_p_]   Next    [_n_]   Next    [_l_] Edit lines
+[_P_]   Skip    [_N_]   Skip    [_a_] Mark all
+[_M-p_] Unmark  [_M-n_] Unmark  [_r_] Mark by regexp
+^ ^             ^ ^             [_q_] Quit
+"
+  ("l" mc/edit-lines :exit t)
+  ("a" mc/mark-all-like-this :exit t)
+  ("n" mc/mark-next-like-this)
+  ("N" mc/skip-to-next-like-this)
+  ("M-n" mc/unmark-next-like-this)
+  ("p" mc/mark-previous-like-this)
+  ("P" mc/skip-to-previous-like-this)
+  ("M-p" mc/unmark-previous-like-this)
+  ("r" mc/mark-all-in-region-regexp :exit t)
+  ("q" nil)
+  ("<mouse-1>" mc/add-cursor-on-click)
+  ("<down-mouse-1>" ignore)
+  ("<drag-mouse-1>" ignore)
+)
+
 (req-package multiple-cursors)
 #+END_SRC
 
 ** Search/replace
+*** The Silver Searcher
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package ag
+  :defer t)
+#+END_SRC
+
 *** Showing search results
 Display 'current match/total matches' in the mode-line in various search modes
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package anzu
              :diminish anzu-mode
-             :init (global-anzu-mode +1))
+             :config (global-anzu-mode +1))
 #+END_SRC
 
 *** Regex search/replace
@@ -1228,7 +1539,7 @@ so install visual-regexp-steroids to use Python's regex model.
 *** Occur
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package occur-x
-  :init 
+  :config 
     (progn
       (setq occur-linenumbers-in-margin 1)
       (add-hook 'occur-mode-hook 'turn-on-occur-x-mode)
@@ -1288,7 +1599,7 @@ I like to shift-select things, so enable that.
 *** Bullets
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package org-bullets
-             :init (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
+             :config (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
 #+END_SRC
 
 *** Todo
@@ -1304,7 +1615,7 @@ Add font styles to DONE lines.
 **** Enable CamelCase awareness for all programming modes
 #+BEGIN_SRC emacs-lisp :tangle yes
 (add-hook 'prog-mode-hook 'subword-mode)
-(eval-after-load "subword" '(diminish 'subword-mode))
+(eval-after-load "subword" '(delight 'subword-mode))
 #+END_SRC
 **** Better commenting
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1315,7 +1626,7 @@ Add font styles to DONE lines.
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package whitespace-cleanup-mode
              :defer t
-             :init (global-whitespace-cleanup-mode t))
+             :config (global-whitespace-cleanup-mode t))
 #+END_SRC
 
 *** Dash
@@ -1327,17 +1638,17 @@ Add font styles to DONE lines.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package flycheck
-             :require (dash s f exec-path-from-shell flycheck-color-mode-line)
-             :ensure flycheck
-             :diminish (flycheck-mode . " ✓ ")
-             :config (add-hook 'after-init-hook 'global-flycheck-mode)
-             :defer t
-             :init
-             (progn
-               (add-hook 'after-init-hook 'global-flycheck-mode)
-               (eval-after-load "flycheck"
-                 '(add-hook 'flycheck-mode-hook 'flycheck-color-mode-line-mode))
-               ))
+  :require (dash s f exec-path-from-shell flycheck-color-mode-line)
+  :ensure flycheck
+  :diminish (flycheck-mode . " ✓ ")
+  :config (add-hook 'after-init-hook 'global-flycheck-mode)
+  :defer t
+  :config
+  (progn
+    (add-hook 'after-init-hook 'global-flycheck-mode)
+    (eval-after-load "flycheck"
+      '(add-hook 'flycheck-mode-hook 'flycheck-color-mode-line-mode))
+    ))
 #+END_SRC
 
 *** General
@@ -1360,20 +1671,18 @@ Install elpy for working with Python, with the =jedi= backend, and nose.
 #+BEGIN_SRC emacs-lisp :tangle yes
 #+END_SRC
 (req-package elpy
-             :init
-             (progn
-               (setq elpy-rpc-backend "jedi")
-              ))
+  :commands elpy-mode
+  :defer t
+  :config
+  (progn
+    (setq elpy-rpc-backend "jedi")
+    (elpy-enable)
+   ))
 
                # ; (setq python-fill-docstring-style 'symmetric)
 #                ;(when (executable-find "ipython")
 #                ;  (elpy-use-ipython))
 #                ;(nose-mode t)
-#                ;(bind-keys :map elpy-mode-map
-#                ;           ("M-<left>" . nil)
-#                ;           ("M-<right>" . nil)
-#                ;           ("C-M-<left>" . elpy-nav-indent-shift-left)
-#                ;           ("C-M-<right>" . elpy-nav-indent-shift-right)
 #                ;           ("C-c n" . hydra-nosetest/body))
 
 # TODO: add `python-docstring-mode` to requirements for elpy
@@ -1416,7 +1725,11 @@ custom key-bindings
   (occur "class \\\|def "))
 
 (defun my/python-mode-hook ()
-  (elpy-enable)
+  (add-to-list 'company-backends 'company-jedi)
+  (elpy-mode)
+  (bind-keys :map elpy-mode-map
+             ("M-<left>" . nil)
+             ("M-<right>" . nil))
   (bind-keys :map python-mode-map
              ("<tab>" . elpy-nav-indent-shift-right)
              ("<backtab>" . elpy-nav-indent-shift-left)))
@@ -1454,6 +1767,9 @@ I occasionally use Jinja for templating, so let's add that mode too.
 (req-package jinja2-mode
              :diminish ""
              :mode ("\\.jinja2?\\'" . jinja2-mode))
+(add-to-list 'auto-mode-alist '("\\.j2\\'" . jinja2-mode))
+(setq web-mode-engines-alist
+             '("jinja" . "\\.j2\\"))
 #+END_SRC
 
 Add =cython-mode= for working with Cython files.
@@ -1480,34 +1796,50 @@ Adding Alchemist for elixir programming.
                  "\\(?:^\\|\\s-+\\)\\(?:do\\)")
             (set (make-variable-buffer-local 'ruby-end-check-statement-modifiers)
                  nil)
-            (ruby-end-mode 1)))
+            (ruby-end-mode 1)
+            (setq alchemist-mix-command "/Users/phillipoldham/.exenv/shims/mix")
+            
+            ))
 #+END_SRC
 **** Erlang
 
-#+BEGIN_SRC emacs-lisp :tangle yes
-(req-package erlang-mode
-             :requires (company-erlang)
-             :defer t
-             :mode ("\\.erl\\'" . erlang-mode))
-#+END_SRC
+##+BEGIN_SRC emacs-lisp :tangle yes
+#(req-package erlang-mode
+#             :requires (company-erlang)
+#             :defer t
+#             :mode ("\\.erl\\'" . erlang-mode))
+##+END_SRC
 
 **** Haskell
-#+BEGIN_SRC emacs-lisp :tangle yes
+#--+BEGIN_SRC emacs-lisp :tangle yes
 (req-package haskell-mode
              :defer t
              :mode ("\\.l?hs\\'" . haskell-mode))
-#+END_SRC
+#--+END_SRC
 **** Nim
-#+BEGIN_SRC emacs-lisp :tangle yes
+#--+BEGIN_SRC emacs-lisp :tangle yes
+#--+END_SRC
 (req-package nim-mode
              :defer t
              :mode ("\\.nim\\'" . nim-mode)
-             :init
+             :config
              (progn
 ; (add-to-list 'company-backends
 ;                '(company-nim :with company-nim-builtin))
 ))
-#+END_SRC
+**** Crystal
+#--+BEGIN_SRC emacs-lisp :tangle yes
+(add-to-list 'load-path (expand-file-name "custom/crystal-mode" dotfiles-dir))
+(require 'crystal-mode)
+(with-eval-after-load 'flycheck
+  (flycheck-add-mode 'flycheck-crystal 'crystal-mode))
+
+(add-hook 'crystal-mode-hook 'company-mode)
+(add-hook 'crystal-mode-hook
+          (lambda ()
+            (ruby-end-mode 1)            
+            ))
+#--+END_SRC
 *** Web
 **** HTML et al
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1516,7 +1848,9 @@ Adding Alchemist for elixir programming.
 
 (add-to-list 'auto-mode-alist '("\\.html?\\'" . web-mode))
 (add-to-list 'auto-mode-alist '("\\.mustache\\'" . web-mode))
-(add-to-list 'auto-mode-alist '("\\.jsx\\'" . web-mode))
+;(add-to-list 'auto-mode-alist '("\\.jsx\\'" . web-mode))
+(add-to-list 'auto-mode-alist '("\\.ecr\\'" . web-mode))
+(add-to-list 'auto-mode-alist '("\\.erb\\'" . web-mode))
 
 ;; use eslint with web-mode for jsx files
 (with-eval-after-load 'flycheck
@@ -1537,8 +1871,20 @@ Adding Alchemist for elixir programming.
 Adding JavaScript
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package js2-mode
+             :config
+             (progn
+               (setq-default js-indent-level 2)
+               (setq-default js2-basic-offset 2)
+
+               (add-to-list 'auto-mode-alist '("\\.js\\'" . js2-mode))
+               ;; Better imenu
+               (add-hook 'js2-mode-hook #'js2-imenu-extras-mode)
+               ))
+#+END_SRC
+
+(req-package js2-mode
              :require (ac-js2 json-mode)
-             :init
+             :config
              (progn
                ;; disable jshint since we prefer eslint checking
                (setq-default flycheck-disabled-checkers
@@ -1557,6 +1903,9 @@ Adding JavaScript
                (add-to-list 'auto-mode-alist '("\\.js\\'" . js2-mode))
                (add-to-list 'auto-mode-alist '("\\.jsx?\\'" . js2-jsx-mode))
 
+               ;; Better imenu
+               (add-hook 'js2-mode-hook #'js2-imenu-extras-mode)
+
                ;; for better jsx syntax-highlighting in web-mode
                ;; - courtesy of Patrick @halbtuerke
                (defadvice web-mode-highlight-part (around tweak-jsx activate)
@@ -1566,17 +1915,17 @@ Adding JavaScript
                    ad-do-it))
 
                ))
-#+END_SRC
+
 **** CoffeeScript
 Adding CoffeeScript
-#+BEGIN_SRC emacs-lisp :tangle yes
+#--+BEGIN_SRC emacs-lisp :tangle yes
 (req-package coffee-mode)
-#+END_SRC
+#--+END_SRC
 **** LiveScript
 Adding LiveScript
-#+BEGIN_SRC emacs-lisp :tangle yes
+#--+BEGIN_SRC emacs-lisp :tangle yes
 (req-package livescript-mode)
-#+END_SRC
+#--+END_SRC
 **** Elm
 
 Adding elm for front-end stuff
@@ -1594,11 +1943,12 @@ Adding elm for front-end stuff
 
 **** Utilities
 ***** YASnippet
-disabled for now
 #+BEGIN_SRC emacs-lisp :tangle yes
-#+END_SRC
 (req-package yasnippet
-             :init (yas-global-mode 1))
+             :config (yas-global-mode 1))
+(add-hook 'sass-mode-hook
+   '(lambda () (set (make-local-variable 'yas-indent-line) 'fixed)))
+#+END_SRC
 
 ***** Mocha (Testing)
 Add the ability to run tests from emacs. Also add some snippets to make writing tests quicker.
@@ -1613,10 +1963,10 @@ Add the ability to run tests from emacs. Also add some snippets to make writing 
              :requires (flycheck-sass))
 #+END_SRC
 *** Less
-#+BEGIN_SRC emacs-lisp :tangle yes
+#--+BEGIN_SRC emacs-lisp :tangle yes
 (req-package less-css-mode
              :requires (flycheck-less))
-#+END_SRC
+#--+END_SRC
 *** Yaml
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package yaml-mode
@@ -1637,7 +1987,7 @@ Add the ability to run tests from emacs. Also add some snippets to make writing 
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package multi-term
-             :init
+             :config
              (progn
                (setq multi-term-program "/bin/zsh")
                ))
@@ -1651,7 +2001,6 @@ Add the ability to run tests from emacs. Also add some snippets to make writing 
 (add-hook 'shell-mode-hook 'ansi-color-for-comint-mode-on)
 (add-to-list 'comint-output-filter-functions 'ansi-color-process-output)
 #+END_SRC
-
 ** Finalising
 *** Kick-off the package install.
 

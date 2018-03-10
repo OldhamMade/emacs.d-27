@@ -1,0 +1,16 @@
+# -*- mode: snippet -*-
+# name: pony-db
+# key: pony-db
+# --
+from pony import orm
+
+db = orm.Database()
+db.bind(provider='sqlite', filename='${1:test}.sqlite', create_db=True)
+
+class ${2:Entity}(db.Entity):
+    id = PrimaryKey(int, auto=True)
+    name = Required(str)
+    $0
+
+db.generate_mapping(create_tables=True)
+orm.set_sql_debug(${3:True})

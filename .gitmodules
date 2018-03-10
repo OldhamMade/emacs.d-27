@@ -1,3 +1,6 @@
 [submodule "themes/leiptr"]
 	path = themes/leiptr
 	url = git@github.com:OldhamMade/leiptr-theme.git
+[submodule "custom/crystal-mode"]
+	path = custom/crystal-mode
+	url = https://github.com/dotmilk/emacs-crystal-mode.git

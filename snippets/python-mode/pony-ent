@@ -1,0 +1,8 @@
+# -*- mode: snippet -*-
+# name: pony-ent
+# key: pony-ent
+# --
+class ${1:Entity}(db.Entity):
+    id = PrimaryKey(int, auto=True)
+    ${2:name} = Required(${3:str})
+    $0

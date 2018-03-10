@@ -1,0 +1,12 @@
+# -*- mode: snippet -*-
+# name: Jinja2 Page
+# key: j2-page
+# --
+{% extends "base.j2" %}
+{% block title %}${1:}{% endblock %}
+{% block head %}
+    {{ super() }}
+{% endblock %}
+{% block content %}
+${0:}
+{% endblock %}

@@ -1,0 +1,59 @@
+# -*- mode: snippet -*-
+# name: Brunch Config
+# key: brunch-config
+# --
+// See http://brunch.io for documentation.
+exports.config = {
+  files: {
+    javascripts: {
+      joinTo: {
+        "js/app.js": /^js/,
+        "js/vendor.js": /^vendor/
+      }
+    },
+    stylesheets: {
+      joinTo: {
+        "css/vendor.css": /^vendor/,
+        "css/app.css": /^(css)|(sass)/
+      },
+      order: {
+        after: ["css/app.css"] // concat app.css last
+      }
+    },
+    templates: {
+      joinTo: "js/app.js"
+    }
+  },
+
+  paths: {
+    // Dependencies and current project directories to watch
+    watched: ["css", "js", "vendor", "sass"],
+    // Where to compile files to
+    public: "../public/"
+  },
+
+  // Configure your plugins
+  plugins: {
+    babel: {
+      // Do not use ES6 compiler in vendor code
+      ignore: [/vendor/]
+    },
+    sass: {
+      mode: "native",
+      options: {
+        includePaths: ["sass"],
+        sourceMapEmbed: true
+      }
+    }
+  },
+
+  modules: {
+    autoRequire: {
+      "js/app.js": ["js/app"]
+    }
+  },
+
+  npm: {
+    enabled: true
+  }
+};

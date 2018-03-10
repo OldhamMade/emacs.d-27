@@ -1,0 +1,6 @@
+# -*- mode: snippet -*-
+# name: pony-wdb
+# key: pony-wdb
+# --
+with db_session:
+    $0

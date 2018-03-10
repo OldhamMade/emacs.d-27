@@ -1,0 +1,32 @@
+# -*- mode: snippet -*-
+# name: Jinja2 Base
+# key: j2-base
+# --
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        {% block head %}
+        <title>{% block title %}{% endblock %}</title>
+        <meta charset="utf-8">
+        <meta http-equiv="x-ua-compatible" content="ie=edge">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+        <link rel="stylesheet" href="/public/css/app.css" />
+        {% endblock %}
+    </head>
+    <body>
+        {% block content %}{% endblock %}
+        {% block footer %}{% endblock %}
+        <script
+            src="https://code.jquery.com/jquery-3.2.1.min.js"
+            integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+            crossorigin="anonymous"></script>
+        <script src="/public/js/vendor.js"></script>
+        <script src="/public/js/app.js"></script>
+        <script>
+         window.ga=function(){ga.q.push(arguments)};ga.q=[];ga.l=+new Date;
+         ga('create','UA-XXXXX-Y','auto');ga('send','pageview')
+        </script>
+        <script src="https://www.google-analytics.com/analytics.js" async defer></script>
+    </body>
+</html>

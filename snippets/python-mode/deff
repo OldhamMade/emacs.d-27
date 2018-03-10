@@ -1,0 +1,7 @@
+# -*- mode: snippet -*-
+# name: Flask function
+# key: deff
+# --
+@${1:app}.route("${2:}")
+def ${3:funcname}(${4:*args, **kwargs}):
+    ${0:pass}

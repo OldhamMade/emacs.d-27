@@ -97,3 +97,4 @@ config.el
 
 # Hide scratch
 .persistent-scratch
+el-get

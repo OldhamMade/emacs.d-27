@@ -1,0 +1,35 @@
+# -*- mode: snippet -*-
+# name: Class conforming to Flask Classy structure
+# key: classy
+# --
+class ${1:Something}View(${2:FlaskView}):
+    \"\"\"
+    ${3:TODO add description}
+    \"\"\"
+    route_base = '${4:/}'
+    decorators = [${5:}]
+
+    def __init__(self):
+        pass
+
+    def index(self):
+        ${0:pass}
+
+    def get(self):
+        pass
+
+    def post(self):
+        pass
+
+    def put(self):
+        pass
+
+    def patch(self):
+        pass
+
+    def delete(self):
+        pass
+
+    @route('/')
+    def other(self):
+        pass
