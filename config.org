@@ -85,7 +85,7 @@ garbage collection during setup. I'll return this to the default
 after setup.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(setq gc-cons-threshold 100000000)
+(setq gc-cons-threshold (* 200 1000 1000))
 #+END_SRC
 
 Let's add some timestamps to the messages so we can see whether anything
@@ -156,6 +156,19 @@ Reduce the message log to 512 entries
 Stop warnings
 #+BEGIN_SRC emacs-lisp :tangle yes
 (setq byte-compile-warnings nil)
+#+END_SRC
+
+Remove tab bar from macos
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(when (memq window-system '(mac ns))
+  (mac-toggle-tab-bar nil))
+#+END_SRC
+
+Tell the world we're inside emacs
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setenv "INSIDE_EMACS" "1")
 #+END_SRC
 
 ** Package Management
@@ -259,13 +272,22 @@ Automatically keep packages up to date.
 This package also provides =bind-key=, which is really useful for managing
 keybindings.
 
-*** Delight
-delight hides or abbreviates minor mode indicators in the modeline
-
+** Operating System Tweaks
+*** MacOS
 #+BEGIN_SRC emacs-lisp :tangle yes
-(req-package delight
-  :ensure t)
+(let ((path (shell-command-to-string ". ~/.zshrc; echo -n $PATH")))
+  (setenv "PATH" path)
+  (setq exec-path 
+        (append
+         (split-string-and-unquote path ":")
+         exec-path)))
 #+END_SRC
+(req-package exec-path-from-shell
+  :config 
+    (progn
+      (when (memq window-system '(mac ns x))
+        (exec-path-from-shell-initialize)
+        (exec-path-from-shell-copy-envs '("PATH")))))
 
 ** Interface
 *** Theme
@@ -300,6 +322,7 @@ Turn line-numbers on everywhere.
 Allow clicking the line-numbers to select the line(s)
 
 #+BEGIN_SRC emacs-lisp :tangle yes
+#+END_SRC
 (defun line-at-click ()
   (save-excursion
   (let ((click-y (cdr (cdr (mouse-position))))
@@ -332,7 +355,6 @@ Allow clicking the line-numbers to select the line(s)
            ("<left-margin> <mouse-1>" . mu-select-linum)
            ("<left-margin> <S-mouse-1>" . mu-select-linum)
            ("<left-margin> <drag-mouse-1>" . mu-select-linum))
-#+END_SRC
 
 *** Seeing changes when working with VC
 
@@ -360,20 +382,19 @@ not. We display the recursion level in the minibuffer to avoid confusion.
 #+END_SRC
 *** Uniquify buffer names
 
-@FIXME
-# +BEGIN_SRC emacs-lisp :tangle yes
+#+BEGIN_SRC emacs-lisp :tangle yes
 (req-package uniquify
+  :ensure nil
   :config
      (setq uniquify-buffer-name-style 'forward)
      )
-# +END_SRC
+#+END_SRC
 
 *** Modeline
 I prefer the cleaner Powerline to the usual modeline.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package powerline
-  :defer t
   :config
   (powerline-default-theme))
 #+END_SRC
@@ -381,6 +402,8 @@ I prefer the cleaner Powerline to the usual modeline.
 Reduce the amount of rubbish in the modeline...
 
 #+BEGIN_SRC emacs-lisp
+(req-package diminish)
+
 (add-hook 'emacs-lisp-mode-hook
   (lambda()
     (setq mode-name "el")))
@@ -390,7 +413,7 @@ Reduce the amount of rubbish in the modeline...
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package unbound
-  :defer t)
+  :load-path "custom/unbound")
 #+END_SRC
 
 ** Key bindings
@@ -435,8 +458,8 @@ Undo/redo
             ;; hide
             ("H-h" . ns-do-hide-emacs)
             ;; search
-            ("H-f" . isearch-forward)
-            ("H-g" . isearch-repeat-forward)
+            ;; ("H-f" . isearch-forward)
+            ;; ("H-g" . isearch-repeat-forward)
             ;; jump to beginning of line
             ("H-<left>" . beginning-of-line)
             ;; jump to end of line
@@ -444,7 +467,7 @@ Undo/redo
             ;; jump to top of file
             ("H-t" . beginning-of-buffer)
             ;; jump to bottom of file
-            ("H-b" . end-of-buffer)
+            ;; ("H-b" . end-of-buffer)
             ;; jump to line number
             ("H-C-l" . goto-line)
             ;; uppercase region
@@ -472,6 +495,9 @@ Undo/redo
             ("H--" . text-scale-decrease)
             ;; prefer ibuffer
             ("C-x C-b" . ibuffer)
+            ;; tmux-style window splitting
+            ("C-b -" . split-window-below)
+            ("C-b |" . split-window-right)
             )
 #+END_SRC
 
@@ -508,6 +534,8 @@ generally be activated accidentally during typing (I type quite fast).
   (key-chord-define-global "d3" 'dash-at-point)
   (key-chord-define-global "R$" 'ag-regexp)
   (key-chord-define-global "m;" 'multiple-cursors-hydra/body)
+  (key-chord-define-global "w2" 'avy-goto-word-1)
+  (key-chord-define-global "j9" 'avy-goto-word-1)
 )
 (req-package key-chord
   :force true
@@ -528,16 +556,32 @@ into a family of short bindings with a common prefix.
 ** Auto-completion (Company mode)
 
 #+BEGIN_SRC emacs-lisp :tangle yes
+(req-package company
+  :diminish ""
+  :config
+    (global-company-mode 1)
+    (setq company-idle-delay 0.2)
+    (define-key company-active-map (kbd "M .") 'company-complete-selection)
+    ; (define-key company-active-map "\t" 'company-yasnippet-or-completion)
+    ; (define-key company-active-map [tab] 'company-complete-common)
+)
+
 (req-package company-quickhelp
-  :requires (company-mode)
+  :requires (company)
   :config
   (progn
-    (global-company-mode 1)
+    ;; (bind-key "\t" 'company-complete-common company-mode-map)
     (company-quickhelp-mode 1)
-    (setq company-idle-delay 0.2)
-    ; (bind-key "\t" 'company-complete-common company-mode-map)
-    (define-key company-active-map "\t" 'company-yasnippet-or-completion)
     ))
+
+ 
+;; With this code, yasnippet will expand the snippet if company didn't complete the word
+;; replace company-complete-common with company-complete if you're using it
+
+; (advice-add 'company-complete :before (lambda () (setq my-company-point (point))))
+; (advice-add 'company-complete :after (lambda ()
+;   		  				(when (equal my-company-point (point))
+;   			  			  (yas-expand))))
 
 (add-hook 'after-init-hook 'global-company-mode)
 
@@ -566,6 +610,7 @@ Turn syntax highlighting on by default
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package highlight-indentation
+  :diminish ""
   :config
     (set-face-background 'highlight-indentation-face "#222")
     (add-hook 'prog-mode-hook 'highlight-indentation-mode)
@@ -711,7 +756,7 @@ Bury certain buffers instead of kill them
 *** Switching buffers
 **** Using cursor keys
 
-CMD + "up"/"down" feel quite natural to me for switching
+CMD + "up"/"down" feels quite natural for me to switch
 between buffers
 
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -812,7 +857,7 @@ between buffers
    :body-pre (setq my/last-buffers
                    (my/name-of-buffers 4)))
    "
-other buffers: 
+Switch to another buffer: 
   %s(my/number-names my/last-buffers)
 
 "
@@ -821,7 +866,7 @@ other buffers:
    ("3" (my/switch-to-buffer 3))
    ("4" (my/switch-to-buffer 4))
    ("O" my/switch-to-buffer-other-window "1 in other window")
-   ("<escape>" nil))
+   ("q" nil "quit"))
 
 (global-set-key "\C-o" 'hydra-switch-to-buffer/body)
 #+END_SRC
@@ -949,7 +994,6 @@ other buffers:
   (lambda ()
     (define-key ibuffer-mode-map "." 'hydra-ibuffer-main/body)))
 #+END_SRC
-
 ** Files
 *** Dired
 
@@ -1097,10 +1141,23 @@ Always reload the file on disk when it updates
 
 *** Autosaves and Backups
 
+Enable auto-save of files as they are edited, so that no changes are lost.
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package super-save
+  :diminish ""
+  :config
+    (progn
+      (super-save-mode +1)
+      (setq super-save-auto-save-when-idle t)  ;; autosave to the real file
+      (setq auto-save-default nil)  ;; disable autosave to backup file
+      ))
+#+END_SRC
+
 Autosaving of files
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(setq auto-save-file-name-transforms `((".*" ,"~/.emacs.d/auto-backup" t)))
+(setq auto-save-file-name-transforms `((".*" ,"~/.emacs.d/auto-backup/" t)))
 #+END_SRC
 
 Backup files to a local directory.
@@ -1109,7 +1166,7 @@ Backup files to a local directory.
 (setq
    backup-by-copying t      ; don't clobber symlinks
    backup-directory-alist
-    '(("." . "~/.emacs.d/auto-backup"))    ; don't litter my fs tree
+    '(("." . "~/.emacs.d/auto-backup/"))    ; don't litter my fs tree
    delete-old-versions t
    kept-new-versions 6
    kept-old-versions 2
@@ -1135,7 +1192,7 @@ Clean whitespace intelligently on save
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package whitespace-cleanup-mode
   :diminish whitespace-cleanup-mode
-  :config (global-whitespace-cleanup-mode))
+  :config (progn (global-whitespace-cleanup-mode)))
 #+END_SRC
 
 ** Navigation
@@ -1255,12 +1312,12 @@ the line. Repeated use of `C-a' toggles between these two positions.
 
 It can be rather handy to jump to the last changed area in a file.
 
-KEYBINDING: "H-M-<left>"
+KEYBINDING: "H-r"
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package goto-last-change
              :diminish ""
-             :bind ("H-M-<left>" . goto-last-change))
+             :bind ("H-r" . goto-last-change))
 #+END_SRC
 
 *** Avy
@@ -1286,25 +1343,103 @@ KEYBINDING: "M-j"
 
 *** Bookmarks
 #+BEGIN_SRC emacs-lisp :tangle yes
+(defhydra hydra-bookmarks (:color pink :hint nil)
+  "
+ ^Bookmarks^
+-^---------^----------------------------------------------
+  [_t_] toggle bookmark
+  [_n_] jump to next      [_s_] show (from current buffer)
+  [_p_] jump to previous  [_a_] show (from all buffers)
+-^---------^----------------------------------------------
+"
+  ("t" bm-toggle "toggle")
+  ("n" bm-next "next")
+  ("p" bm-previous "previous")
+  ("s" bm-show "show (current buffer)")
+  ("a" bm-show-all "show (all buffers)")
+  ("q" nil)
+)
 (req-package bm
-             :diminish ""
-             :bind (("C-b m" . bm-toggle)
-                    ("C-b n" . bm-next)
-                    ("C-b p" . bm-previous)
-                    ("H->" . bm-next)
-                    ("H-<" . bm-previous)))
+  :require (hydra)
+  :diminish ""
+  :config
+    (global-set-key (kbd "H-b") 'hydra-bookmarks/body)
+)
 #+END_SRC
-*** Jump-to-definition
+*** Jump around
 #+begin_src emacs-lisp :tangle yes
+(defun occur-dwim ()
+  "Call `occur' with a sane default, chosen as the thing under point or selected region"
+  (interactive)
+  (push (if (region-active-p)
+            (buffer-substring-no-properties
+             (region-beginning)
+             (region-end))
+          (let ((sym (thing-at-point 'symbol)))
+            (when (stringp sym)
+              (regexp-quote sym))))
+        regexp-history)
+  (call-interactively 'occur))
+
+(defun noccur-project-dwim ()
+  "Call `occur' with a sane default, chosen as the thing under point or selected region"
+  (interactive)
+  (push (if (region-active-p)
+            (buffer-substring-no-properties
+             (region-beginning)
+             (region-end))
+          (let ((sym (thing-at-point 'symbol)))
+            (when (stringp sym)
+              (regexp-quote sym))))
+        regexp-history)
+  (call-interactively 'noccur-project))
+
+(defadvice occur-mode-goto-occurrence (after occur-mode-goto-occurrence-advice activate)
+  (other-window 1)
+  (kill-buffer)
+  (delete-window))
+
+;; Focus on *Occur* window right away.
+(add-hook 'occur-hook (lambda () (other-window 1)))
+
+(defhydra hydra-jump (:color pink :hint nil)
+  "
+ ^Dumb Jump^                       | ^Symbol Jump^           | ^Avy Jump^    | ^Buffer Jump^  
+-^---------^-----------------------+-^-----------^-----------+-^--------^----+-^-----------^----
+  [_j_] jump to symbol             |  [_s_] symbol at point  |  [_c_] char   |  [_t_] top     
+  [_r_] jump back (return)         |  [_n_] next             |  [_2_] char2  |  [_b_] bottom  
+  [_w_] jump, target other window  |  [_p_] previous         |  [_l_] line   |
+  [_x_] jump, preferring external  |  [_o_] occurances       | ^^            |  [_g_] goto line
+  [_ _] quick look                 |  [_m_] all occurances   | ^^            |
+-^---------^-----------------------+-^-----------^-----------+-^---------^---+-^-----------^----
+"
+  ("j" dumb-jump-go)
+  ("r" dumb-jump-back)
+  (" " dumb-jump-quick-look)
+  ("w" dumb-jump-go-other-window)
+  ("x" dumb-jump-go-prefer-external)
+  ("t" beginning-of-buffer :exit t)
+  ("b" end-of-buffer :exit t)
+  ("s" isearch-forward-symbol-at-point)
+  ("n" isearch-repeat-forward :color red)
+  ("p" isearch-repeat-backward :color red)
+  ("o" occur-dwim :exit t)
+  ("m" noccur-project-dwim :exit t)
+  ("g" goto-line :exit t)
+  ("c" avy-goto-word-1 :exit t)
+  ("2" avy-goto-char-2 :exit t)
+  ("l" avy-goto-line :exit t)
+  ("q" (lambda () (interactive) (isearch-done)) :exit t)
+)
 (req-package dumb-jump
-             :diminish ""
-             :defer t
-             :bind (("H-j" . dumb-jump-go)
-                    ("H-S-j" . dumb-jump-back)
-                    ("H-M-j" . dumb-jump-quick-look))
-             :config
-             (progn
-               (setq dumb-jump-default-project "~/Projects")))
+  :require (noccur)
+  :diminish ""
+  :defer t
+  :bind ("H-j" . hydra-jump/body)
+  :config
+  (progn
+    (setq dumb-jump-force-searcher 'ag)
+    (setq dumb-jump-default-project "~/Projects")))
 #+END_SRC
 
 ** Editing
@@ -1338,6 +1473,17 @@ Set tab width to 4 for all buffers
 #+BEGIN_SRC emacs-lisp :tangle yes
 (setq-default tab-width 4)
 #+END_SRC
+
+Add smart tabs
+
+# +BEGIN_SRC emacs-lisp :tangle yes
+(req-package smart-tabs-mode
+  :defer t
+  :diminish t
+  :config
+    (smart-tabs-insinuate 'c 'javascript 'python 'ruby 'nxml)
+  )
+# +END_SRC
 
 *** Overwriting
 
@@ -1384,12 +1530,6 @@ Enable CUA mode for using =C-RET= for working with rectangles.
 (define-key global-map (kbd "<S-mouse-1>") 'mouse-set-point)
 (put 'mouse-set-point 'CUA 'move)
 #+END_SRC
-
-#--- +BEGIN_SRC emacs-lisp :tangle yes
-(add-to-list 'load-path (expand-file-name "custom/cua-lite" dotfiles-dir))
-(require 'cua-lite)
-;; (cua-lite 1)
-#--- +END_SRC
 
 Transient-mark-mode needs to be reenabled after enabling CUA-mode
 
@@ -1458,7 +1598,7 @@ Unfill functions providing the inverse of fill-paragraph and fill-region
 
 *** Browse Kill Ring
 
-KEYBINDING: "M y"
+KEYBINDING: "M-y"
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package browse-kill-ring
@@ -1488,30 +1628,130 @@ KEYBINDING: "M y"
 [_M-p_] Unmark  [_M-n_] Unmark  [_r_] Mark by regexp
 ^ ^             ^ ^             [_q_] Quit
 "
-  ("l" mc/edit-lines :exit t)
-  ("a" mc/mark-all-like-this :exit t)
+  ("l" mc/edit-lines)
+  ("a" mc/mark-all-like-this)
   ("n" mc/mark-next-like-this)
   ("N" mc/skip-to-next-like-this)
   ("M-n" mc/unmark-next-like-this)
   ("p" mc/mark-previous-like-this)
   ("P" mc/skip-to-previous-like-this)
   ("M-p" mc/unmark-previous-like-this)
-  ("r" mc/mark-all-in-region-regexp :exit t)
+  ("r" mc/mark-all-in-region-regexp)
   ("q" nil)
   ("<mouse-1>" mc/add-cursor-on-click)
   ("<down-mouse-1>" ignore)
   ("<drag-mouse-1>" ignore)
 )
 
-(req-package multiple-cursors)
+(req-package multiple-cursors
+  :config (define-key mc/keymap (kbd "<return>") nil))
 #+END_SRC
+
+*** Transpose
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defhydra hydra-transpose (:color red)
+  "Transpose"
+   ("c" transpose-chars "characters")
+   ("w" transpose-words "words")
+   ("o" org-transpose-words "Org mode words")
+   ("l" transpose-lines "lines")
+   ("s" transpose-sentences "sentences")
+   ("e" org-transpose-elements "Org mode elements")
+   ("p" transpose-paragraphs "paragraphs")
+   ("t" org-table-transpose-table-at-point "Org mode table")
+   ("q" nil "cancel" :color blue))
+(global-set-key (kbd "M-t") 'hydra-transpose/body)
+#+END_SRC
+
+*** Move text
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package move-text
+  :diminish ""
+  :defer t
+  :config (move-text-default-bindings))
+#+END_SRC
+
+*** Duplicate lines/region
+(defun duplicate-line (arg)
+  "Duplicate current line, leaving point in lower line."
+  (interactive "*p")
+
+  ;; save the point for undo
+  (setq buffer-undo-list (cons (point) buffer-undo-list))
+
+  ;; local variables for start and end of line
+  (let ((bol (save-excursion (beginning-of-line) (point)))
+        eol)
+    (save-excursion
+
+      ;; don't use forward-line for this, because you would have
+      ;; to check whether you are at the end of the buffer
+      (end-of-line)
+      (setq eol (point))
+
+      ;; store the line and disable the recording of undo information
+      (let ((line (buffer-substring bol eol))
+            (buffer-undo-list t)
+            (count arg))
+        ;; insert the line arg times
+        (while (> count 0)
+          (newline)         ;; because there is no newline in 'line'
+          (insert line)
+          (setq count (1- count)))
+        )
+
+      ;; create the undo information
+      (setq buffer-undo-list (cons (cons eol (point)) buffer-undo-list)))
+    ) ; end-of-let
+
+  ;; put the point in the lowest line and return
+  (next-line arg))
+
+(global-set-key (kbd "C-d") 'duplicate-line)
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defun duplicate-current-line-or-region (arg)
+  "Duplicates the current line or region ARG times.
+If there's no region, the current line will be duplicated. However, if
+there's a region, all lines that region covers will be duplicated."
+  (interactive "p")
+  (let (beg end (origin (point)))
+    (if (and mark-active (> (point) (mark)))
+        (exchange-point-and-mark))
+    (setq beg (line-beginning-position))
+    (if mark-active
+        (exchange-point-and-mark))
+    (setq end (line-end-position))
+    (let ((region (buffer-substring-no-properties beg end)))
+      (dotimes (i arg)
+        (goto-char end)
+        (newline)
+        (insert region)
+        (setq end (point)))
+      (goto-char (+ origin (* (length region) arg) arg)))))
+(global-set-key (kbd "C-d") 'duplicate-current-line-or-region)
+#+END_SRC
+*** Folding
+#+BEGIN_SRC emacs-lisp :tangle yes
+(add-to-list 'load-path (expand-file-name "custom/fold-dwim" dotfiles-dir))
+(require 'fold-dwim)
+
+(req-package fold-dwim
+  :bind ("M-RET" . hydra-fold/body)
+  :init 
+    (defhydra hydra-fold (:pre (hs-minor-mode 1) :color blue)
+      "fold"
+      ("RET" fold-dwim-toggle "toggle")
+      ("a" fold-dwim-hide-all "hide-all")
+      ("s" fold-dwim-show-all "show-all")
+      ("q" nil "quit")))
+#+END_SRC
+(global-set-key (kbd "M-RET") 'hydra-fold/body)
 
 ** Search/replace
 *** The Silver Searcher
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(req-package ag
-  :defer t)
+(req-package ag)
 #+END_SRC
 
 *** Showing search results
@@ -1519,8 +1759,8 @@ Display 'current match/total matches' in the mode-line in various search modes
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package anzu
-             :diminish anzu-mode
-             :config (global-anzu-mode +1))
+  :diminish anzu-mode
+  :config (global-anzu-mode +1))
 #+END_SRC
 
 *** Regex search/replace
@@ -1581,12 +1821,17 @@ Allow indenting natively within source blocks.
 (setq org-src-tab-acts-natively t)
 #+END_SRC
 
-Org-mode has some very annoying keybindings, which interfere with my preferred keybindings.
+Org-mode has some keybindings which I find very annoying as they interfere 
+with my preferred keybindings, so I'll remove them here.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (add-hook 'org-mode-hook
   (lambda()
     (local-unset-key (kbd "C-<tab>")) ; allow switching between frames
+    (local-unset-key (kbd "M-S-<left>")) ; allow selecting while word-jumping
+    (local-unset-key (kbd "M-S-<right>")) ; allow selecting while word-jumping
+    (local-set-key (kbd "M-H-<left>") 'org-shiftmetaleft) ; allow selecting while word-jumping
+    (local-set-key (kbd "M-H-<right>") 'org-shiftmetaright) ; allow selecting while word-jumping
     ))
 #+END_SRC
 
@@ -1596,13 +1841,13 @@ I like to shift-select things, so enable that.
 (setq org-support-shift-select 'always)
 #+END_SRC
 
-*** Bullets
+**** Bullets
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package org-bullets
              :config (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
 #+END_SRC
 
-*** Todo
+**** Todo
 
 Add font styles to DONE lines.
 
@@ -1612,21 +1857,30 @@ Add font styles to DONE lines.
 
 ** Programming
 *** Common
+**** Git interaction
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package magit
+  :config
+    (setq magit-branch-arguments nil)
+    (setq magit-push-arguments '("--set-upstream"))
+    )
+
+(req-package magithub
+  :after magit
+  :config
+    (magithub-feature-autoinject t)
+    (setq magithub-clone-default-directory "~/Projects")
+    )
+#+END_SRC
 **** Enable CamelCase awareness for all programming modes
 #+BEGIN_SRC emacs-lisp :tangle yes
 (add-hook 'prog-mode-hook 'subword-mode)
-(eval-after-load "subword" '(delight 'subword-mode))
+(eval-after-load "subword" '(diminish 'subword-mode))
 #+END_SRC
 **** Better commenting
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package comment-dwim-2
              :bind  (("M-;" . comment-dwim-2)))
-#+END_SRC
-**** Automated white-space cleanup
-#+BEGIN_SRC emacs-lisp :tangle yes
-(req-package whitespace-cleanup-mode
-             :defer t
-             :config (global-whitespace-cleanup-mode t))
 #+END_SRC
 
 *** Dash
@@ -1640,7 +1894,6 @@ Add font styles to DONE lines.
 (req-package flycheck
   :require (dash s f exec-path-from-shell flycheck-color-mode-line)
   :ensure flycheck
-  :diminish (flycheck-mode . " ✓ ")
   :config (add-hook 'after-init-hook 'global-flycheck-mode)
   :defer t
   :config
@@ -1650,6 +1903,7 @@ Add font styles to DONE lines.
       '(add-hook 'flycheck-mode-hook 'flycheck-color-mode-line-mode))
     ))
 #+END_SRC
+  :diminish " ✓ "
 
 *** General
 **** Python
@@ -1688,8 +1942,8 @@ Install elpy for working with Python, with the =jedi= backend, and nose.
 # TODO: add `python-docstring-mode` to requirements for elpy
 #              :require (nose)
 
-Enable company mode auto-completion backend for python, and some
-custom key-bindings
+# Enable company mode auto-completion backend for python, and some
+# custom key-bindings
 
 (defun python-backtab ()
   (interactive)
@@ -1718,6 +1972,10 @@ custom key-bindings
 (defadvice python-indent-shift-right (after python-indent-shift-right activate)
   (back-to-indentation))
 
+  # (elpy-mode)
+  # (bind-keys :map elpy-mode-map
+  #            ("M-<left>" . nil)
+  #            ("M-<right>" . nil))
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (defun pyfile-overview ()
@@ -1726,13 +1984,8 @@ custom key-bindings
 
 (defun my/python-mode-hook ()
   (add-to-list 'company-backends 'company-jedi)
-  (elpy-mode)
-  (bind-keys :map elpy-mode-map
-             ("M-<left>" . nil)
-             ("M-<right>" . nil))
-  (bind-keys :map python-mode-map
-             ("<tab>" . elpy-nav-indent-shift-right)
-             ("<backtab>" . elpy-nav-indent-shift-left)))
+  (smart-tabs-advice python-indent-line-1 python-indent)
+  )
 (add-hook 'python-mode-hook 'my/python-mode-hook)
 #+END_SRC
 
@@ -1764,13 +2017,13 @@ custom key-bindings
 I occasionally use Jinja for templating, so let's add that mode too.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
+#+END_SRC
 (req-package jinja2-mode
              :diminish ""
              :mode ("\\.jinja2?\\'" . jinja2-mode))
 (add-to-list 'auto-mode-alist '("\\.j2\\'" . jinja2-mode))
 (setq web-mode-engines-alist
              '("jinja" . "\\.j2\\"))
-#+END_SRC
 
 Add =cython-mode= for working with Cython files.
 
@@ -1782,25 +2035,69 @@ Add =cython-mode= for working with Cython files.
 Adding Alchemist for elixir programming.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(req-package ruby-end)
 (req-package alchemist
-             :requires (elixir-mode)
-             :defer t
-             :mode ("\\.exs\\'" . alchemist-mode))
+  :requires (elixir-mode ruby-end)
+  :defer t
+  :mode ("\\.exs?\\'" . alchemist-mode))
 
 (add-hook 'elixir-mode-hook 'alchemist-mode)
 (add-hook 'elixir-mode-hook 'company-mode)
 (add-hook 'elixir-mode-hook
           (lambda ()
+            (setq alchemist-mix-command "source /usr/local/Cellar/asdf/0.4.3/asdf.sh && mix"
+                  alchemist-execute-command "source /usr/local/Cellar/asdf/0.4.3/asdf.sh && elixir"
+                  alchemist-iex-program-name "source /usr/local/Cellar/asdf/0.4.3/asdf.sh && iex"
+                  alchemist-compile-command "source /usr/local/Cellar/asdf/0.4.3/asdf.sh && elixirc")
             (set (make-variable-buffer-local 'ruby-end-expand-keywords-before-re)
                  "\\(?:^\\|\\s-+\\)\\(?:do\\)")
             (set (make-variable-buffer-local 'ruby-end-check-statement-modifiers)
                  nil)
             (ruby-end-mode 1)
-            (setq alchemist-mix-command "/Users/phillipoldham/.exenv/shims/mix")
-            
             ))
+
+(req-package delight)
+(delight '((emacs-lisp-mode "elisp" :major)
+           (elixir-mode "[ex]" elixir)
+           (alchemist-mode "[al]" alchemist)
+           (alchemist-hex-mode "[alhex]" alchemist)
+           (alchemist-test-mode "[altest]" alchemist)
+           (ruby-end-mode "" ruby-end)))
 #+END_SRC
+(push (expand-file-name "/usr/local/Cellar/asdf/0.4.3/installs/elixir/1.6.5/bin") exec-path)
+(push (expand-file-name "/usr/local/Cellar/asdf/0.4.3/installs/erlang/20.3.6/bin") exec-path)
+
+            (setq alchemist-mix-command "/usr/local/Cellar/asdf/0.4.3/installs/elixir/1.6.5/bin/mix"
+                  alchemist-execute-command "/usr/local/Cellar/asdf/0.4.3/installs/elixir/1.6.5/bin/elixir"
+                  alchemist-iex-program-name "/usr/local/Cellar/asdf/0.4.3/installs/elixir/1.6.5/bin/iex"
+                  alchemist-compile-command "/usr/local/Cellar/asdf/0.4.3/installs/elixir/1.6.5/bin/elixirc")
+            (setq alchemist-mix-command "/usr/local/Cellar/asdf/0.4.3/shims/mix"
+                  alchemist-execute-command "/usr/local/Cellar/asdf/0.4.3/shims/elixir"
+                  alchemist-iex-program-name "/usr/local/Cellar/asdf/0.4.3/shims/iex"
+                  alchemist-compile-command "/usr/local/Cellar/asdf/0.4.3/shims/elixirc")
+
+Support for .eex files
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(add-to-list 'auto-mode-alist '("\\.eex\\'" . web-mode))
+#+END_SRC
+
+Code folding
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(add-to-list 'hs-special-modes-alist
+             '(elixir-mode
+               ("\\(cond\\|quote\\|defmacro\\|defmacrop\\|defp\\|def\\|if\\) .*\\(do\\)" 2) "\\(end\\)" "#"
+               nil nil))
+#+END_SRC
+
+(eval-after-load "hideshow"
+  '(add-to-list 'hs-special-modes-alist
+                `(elixir-mode
+                  ,(rx "do")  ; Block start
+                  ,(rx "end") ; Block end
+                  ,(rx "#")  ; Comment start
+                  nil
+                  nil)))
 **** Erlang
 
 ##+BEGIN_SRC emacs-lisp :tangle yes
@@ -1810,36 +2107,17 @@ Adding Alchemist for elixir programming.
 #             :mode ("\\.erl\\'" . erlang-mode))
 ##+END_SRC
 
-**** Haskell
-#--+BEGIN_SRC emacs-lisp :tangle yes
-(req-package haskell-mode
-             :defer t
-             :mode ("\\.l?hs\\'" . haskell-mode))
-#--+END_SRC
 **** Nim
-#--+BEGIN_SRC emacs-lisp :tangle yes
-#--+END_SRC
+#+BEGIN_SRC emacs-lisp :tangle yes
 (req-package nim-mode
-             :defer t
-             :mode ("\\.nim\\'" . nim-mode)
-             :config
-             (progn
-; (add-to-list 'company-backends
-;                '(company-nim :with company-nim-builtin))
-))
-**** Crystal
-#--+BEGIN_SRC emacs-lisp :tangle yes
-(add-to-list 'load-path (expand-file-name "custom/crystal-mode" dotfiles-dir))
-(require 'crystal-mode)
-(with-eval-after-load 'flycheck
-  (flycheck-add-mode 'flycheck-crystal 'crystal-mode))
-
-(add-hook 'crystal-mode-hook 'company-mode)
-(add-hook 'crystal-mode-hook
-          (lambda ()
-            (ruby-end-mode 1)            
-            ))
-#--+END_SRC
+  :defer t
+  :mode ("\\.nim\\'" . nim-mode))
+#+END_SRC
+  :config
+  (progn
+    (add-to-list 'company-backends
+      '(company-nim :with company-nim-builtin))
+    ))
 *** Web
 **** HTML et al
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1916,19 +2194,9 @@ Adding JavaScript
 
                ))
 
-**** CoffeeScript
-Adding CoffeeScript
-#--+BEGIN_SRC emacs-lisp :tangle yes
-(req-package coffee-mode)
-#--+END_SRC
-**** LiveScript
-Adding LiveScript
-#--+BEGIN_SRC emacs-lisp :tangle yes
-(req-package livescript-mode)
-#--+END_SRC
 **** Elm
 
-Adding elm for front-end stuff
+I often use Elm for front-end development.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package elm-mode
@@ -1941,6 +2209,16 @@ Adding elm for front-end stuff
 (add-hook 'elm-mode-hook #'elm-oracle-setup-completion)
 #+END_SRC
 
+**** WebMode
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq web-mode-engines-alist
+	  '(
+		("elixir"	 . "\\.eex\\'")
+		)
+	  )
+#+END_SRC
+
 **** Utilities
 ***** YASnippet
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1950,23 +2228,12 @@ Adding elm for front-end stuff
    '(lambda () (set (make-local-variable 'yas-indent-line) 'fixed)))
 #+END_SRC
 
-***** Mocha (Testing)
-Add the ability to run tests from emacs. Also add some snippets to make writing tests quicker.
-#-+BEGIN_SRC emacs-lisp :tangle yes
-;(req-package mocha
-;             :requires (mocha-snippets))
-#-+END_SRC
 ** Markup
 *** Sass/Scss
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package sass-mode
              :requires (flycheck-sass))
 #+END_SRC
-*** Less
-#--+BEGIN_SRC emacs-lisp :tangle yes
-(req-package less-css-mode
-             :requires (flycheck-less))
-#--+END_SRC
 *** Yaml
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package yaml-mode
@@ -2005,6 +2272,7 @@ Add the ability to run tests from emacs. Also add some snippets to make writing 
 *** Kick-off the package install.
 
 #+BEGIN_SRC emacs-lisp :tangle yes
+(req-package esup)
 (req-package-finish)
 #+END_SRC
 
@@ -2014,7 +2282,7 @@ Now everything is set up, I want to return the gc level
 back to the default to make the UI more responsive
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(setq gc-cons-threshold 800000)
+(setq gc-cons-threshold (* 2 1000 1000))
 #+END_SRC
 
 I also want to make sure any minibuffer operations
@@ -2031,3 +2299,8 @@ don't trigger the gc, so tools like flx won't pause.
 (add-hook 'minibuffer-exit-hook #'my-minibuffer-exit-hook)
 #+END_SRC
 
+Now that we're done, let's see just how long it took to start up.
+
+(lambda () (interactive) (emacs-init-time))
+#+BEGIN_SRC emacs-lisp :tangle yes
+#+END_SRC
