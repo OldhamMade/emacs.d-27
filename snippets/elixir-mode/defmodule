@@ -1,0 +1,8 @@
+# -*- mode: snippet -*-
+# name: defmodule
+# key: defmodule
+# --
+defmodule ${1:ModuleName$(upcase-initials yas-text)} do
+  @moduledoc false
+  $0
+end
