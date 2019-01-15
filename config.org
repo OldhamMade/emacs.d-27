@@ -176,6 +176,12 @@ is causing emacs to block for a significant amount of time.
 #+END_SRC
 *** Display a dashboard on startup
 #+BEGIN_SRC emacs-lisp :tangle yes
+(defun dashboard ()
+  """Display the dashboard, recreating buffer if closed."""
+  (interactive)
+  (switch-to-buffer "*dashboard*")
+  (dashboard-refresh-buffer))
+
 (defun my/dashboard-banner ()
   """Set a dashboard banner including information on package initialization
    time and garbage collections."""
@@ -381,6 +387,8 @@ like flx won't pause.
 (req-package keyfreq
   :defer 1
   :config
+    (setq keyfreq-file "~/.emacs.d/keyfreq"
+          keyfreq-file-lock "~/.emacs.d/.keyfreq.lock")
     (keyfreq-mode 1)
     (keyfreq-autosave-mode 1))
 #+END_SRC
@@ -646,7 +654,7 @@ easier to visually search
 *** Bury special buffers instead of killing
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(setq bury-buffer-names '("*scratch*" "*Messages*"))
+(setq bury-buffer-names '("*scratch*" "*Messages*" "*dashboard*"))
 
 (defun kill-buffer-query-functions-maybe-bury ()
   "Bury certain buffers instead of killing them."
@@ -1070,6 +1078,11 @@ are seen as projects by default.
 #+END_SRC
 ** Files
 *** Dired
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package dired+
+  :load-path "~/.emacs.d/custom/dired+")
+#+END_SRC
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (add-hook 'dired-mode-hook 'diff-hl-dired-mode-unless-remote)
