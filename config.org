@@ -1329,12 +1329,12 @@ the line. Repeated use of `C-a' toggles between these two positions.
   "
  ^Bookmarks^
 -^---------^----------------------------------------------
-  [_t_] toggle bookmark
+  [_b_] toggle bookmark
   [_n_] jump to next      [_s_] show (from current buffer)
   [_p_] jump to previous  [_a_] show (from all buffers)
 -^---------^----------------------------------------------
 "
-  ("t" bm-toggle)
+  ("b" bm-toggle)
   ("n" bm-next)
   ("p" bm-previous)
   ("s" bm-show)
@@ -1394,7 +1394,7 @@ the line. Repeated use of `C-a' toggles between these two positions.
 ;; Focus on *Occur* window right away.
 (add-hook 'occur-hook (lambda () (other-window 1)))
 
-(defhydra hydra-jump (:color pink :hint nil)
+(defhydra hydra-jump (:color pink :hint nil :timeout 5.0)
   "
  ^Dumb Jump^                       | ^Symbol Jump^           | ^Avy Jump^    | ^Buffer Jump^
 -^---------^-----------------------+-^-----------^-----------+-^--------^----+-^-----------^-------------------
