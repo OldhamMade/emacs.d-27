@@ -632,9 +632,8 @@ easier to visually search
 #+BEGIN_SRC  emacs-lisp :tangle yes
 (req-package persistent-scratch
   :config
-  (progn
-    (persistent-scratch-setup-default)
-    ))
+  (setq persistent-scratch-save-file (expand-file-name "~/Dropbox/.emacs.persist/.scratch"))
+  (persistent-scratch-setup-default))
 
 (defun my/set-scratch-as-text ()
   (with-current-buffer (get-buffer "*scratch*")
@@ -1287,6 +1286,8 @@ file of a buffer in an external program."
     (list "COMMIT_EDITMSG"
           (expand-file-name package-user-dir)
           (expand-file-name "~/.emacs.d/config.el")
+          (expand-file-name "~/Dropbox/.emacs.persist/.breadcrumbs")
+          (expand-file-name "~/Dropbox/.emacs.persist/.scratch")
           "ido\\.last"
           "recentf"
           "~$"
@@ -1325,27 +1326,33 @@ the line. Repeated use of `C-a' toggles between these two positions.
 
 *** Managing Bookmarks with =H-b=
 #+BEGIN_SRC emacs-lisp :tangle yes
-(defhydra hydra-bookmarks (:color pink :hint nil)
+(defhydra hydra-bookmarks (:color pink :hint nil :timeout 3.0)
   "
  ^Bookmarks^
--^---------^----------------------------------------------
-  [_b_] toggle bookmark
-  [_n_] jump to next      [_s_] show (from current buffer)
-  [_p_] jump to previous  [_a_] show (from all buffers)
--^---------^----------------------------------------------
+-^---------^--------------------------------------------------
+  [_b_] toggle bookmark         [_l_] list all
+  [_n_] jump to local next      [_N_] jump to global next
+  [_p_] jump to local previous  [_P_] jump to global previous
+  [_c_] jump to current         [_K_] kill/clear all bookmarks
+-^---------^--------------------------------------------------
 "
-  ("b" bm-toggle)
-  ("n" bm-next)
-  ("p" bm-previous)
-  ("s" bm-show)
-  ("a" bm-show-all)
+  ("b" bc-set)
+  ("l" bc-list)
+  ("n" bc-local-next)
+  ("p" bc-local-previous)
+  ("c" bc-goto-current)
+  ("N" bc-next)
+  ("P" bc-previous)
+  ("K" bc-clear)
   ("q" nil)
 )
-(req-package bm
+(req-package breadcrumb
+  :load-path "~/.emacs.d/custom/breadcrumb"
   :defer 2
   :require (hydra)
   :diminish ""
   :config
+    (setq bc-bookmark-file (expand-file-name "~/Dropbox/.emacs.persist/.breadcrumbs"))
     (global-set-key (kbd "H-b") 'hydra-bookmarks/body)
 )
 #+END_SRC
@@ -1396,13 +1403,13 @@ the line. Repeated use of `C-a' toggles between these two positions.
 
 (defhydra hydra-jump (:color pink :hint nil :timeout 5.0)
   "
- ^Dumb Jump^                       | ^Symbol Jump^           | ^Avy Jump^    | ^Buffer Jump^
+ ^Dumb Jump^                       | ^Diff Jump^             | ^Avy Jump^    | ^Buffer Jump^
 -^---------^-----------------------+-^-----------^-----------+-^--------^----+-^-----------^-------------------
-  [_j_] jump to symbol             |  [_s_] symbol at point  |  [_c_] char   |  [_t_] top
-  [_r_] jump back (return)         |  [_n_] next             |  [_2_] char2  |  [_b_] bottom
-  [_w_] jump, target other window  |  [_p_] previous         |  [_l_] line   |  [_u_] last change
-  [_x_] jump, preferring external  |  [_o_] occurances       | ^^            |  [_g_] goto line
-  [_ _] quick look                 |  [_m_] all occurances   | ^^            |  [_h_] historic cursor positions
+  [_j_] jump to symbol             |  [_n_] next hunk        |  [_c_] char   |  [_t_] top
+  [_r_] jump back (return)         |  [_p_] previous hunk    |  [_2_] char2  |  [_b_] bottom
+  [_w_] jump, target other window  |  ^^                     |  [_l_] line   |  [_u_] last change
+  [_x_] jump, preferring external  |  ^^                     |  ^^           |  [_g_] goto line
+  [_ _] quick look                 |  ^^                     |  ^^           |  [_h_] historic cursor positions
 -^---------^-----------------------+-^-----------^-----------+-^---------^---+-^-----------^-------------------
 "
   ;; Dumb-jump
@@ -1412,11 +1419,8 @@ the line. Repeated use of `C-a' toggles between these two positions.
   ("w" dumb-jump-go-other-window)
   ("x" dumb-jump-go-prefer-external)
   ;; Jump by symbol
-  ("s" isearch-forward-symbol-at-point)
-  ("n" isearch-repeat-forward :color red)
-  ("p" isearch-repeat-backward :color red)
-  ("o" occur-dwim :exit t)
-  ("m" noccur-project-dwim :exit t)
+  ("n" diff-hl-next-hunk :color red)
+  ("p" diff-hl-previous-hunk :color red)
   ;; Jump by narrowing character (Avy)
   ("c" avy-goto-word-1 :exit t)
   ("2" avy-goto-char-2 :exit t)
@@ -1718,6 +1722,38 @@ there's a region, all lines that region covers will be duplicated."
 #+END_SRC
 
 ** Search/replace
+*** "Find" hydra
+#+BEGIN_SRC emacs-lisp :tangle yes
+(defhydra hydra-find (:color pink :hint nil :timeout 5.0)
+  "
+ ^Find/Replace^              | ^Find by Symbol^
+-^^--------------------------|-^^----------------------
+  [_f_] Find by regex        |  [_s_] symbol at point
+  [_a_] Find using Ag        |  [_n_] next
+  [_v_] Visual find/replace  |  [_p_] previous
+  [_r_] Regex find/replace   |  [_o_] occurances
+  [_t_] Thesaurus/synonyms   |  [_m_] all occurances
+-^^--------------------------|-^^----------------------
+"
+  ;; find/replace
+  ("f" vr/isearch-forward :color red)
+  ("a" ag-regexp :color red)
+  ("v" vr/replace :color red)
+  ("r" vr/query-replace :color red)
+  ("t" synosaurus-choose-and-replace :color red)
+  ;; find by symbol
+  ("s" isearch-forward-symbol-at-point)
+  ("n" isearch-repeat-forward :color red)
+  ("p" isearch-repeat-backward :color red)
+  ("o" occur-dwim :exit t)
+  ("m" noccur-project-dwim :exit t)
+  ;; exit menu
+  ("q" (lambda () (interactive) (isearch-done)) :exit t)
+)
+
+(bind-key* "H-f" 'hydra-find/body)
+#+END_SRC
+
 *** Add =ag= for searching (faster than =grep=)
 
 #+BEGIN_SRC emacs-lisp :tangle yes
