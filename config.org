@@ -192,7 +192,6 @@ is causing emacs to block for a significant amount of time.
 (req-package dashboard
   :require (page-break-lines)
   :init
-  (add-hook 'after-init-hook 'dashboard-refresh-buffer)
   (add-hook 'dashboard-mode-hook 'my/dashboard-banner)
   :config
   (dashboard-setup-startup-hook)
@@ -238,51 +237,51 @@ My personal theme: https://github.com/OldhamMade/leiptr-them
 #+BEGIN_SRC emacs-lisp :tangle yes
 (set-face-attribute 'default nil :font "SFMono Nerd Font:pixelsize=10:weight=normal:slant=normal:width=normal:spacing=100:scalable=true")
 #+END_SRC
-*** Add line numbers for all buffers
+*** [DISABLED] Add line numbers for all buffers
 #+BEGIN_SRC emacs-lisp :tangle yes
-(req-package hlinum
-  :defer 0.5
-  :config
-    (global-linum-mode 1)
-    (setq linum-format "%4d\u23B9")
-    (setq column-number-mode 1)
-    (hlinum-activate)
-    )
+;(req-package hlinum
+;  :defer 0.5
+;  :config
+;    (global-linum-mode 1)
+;    (setq linum-format "%4d\u23B9")
+;    (setq column-number-mode 1)
+;    (hlinum-activate)
+;    )
 #+END_SRC
-*** Select lines by clicking line number
+*** [DISABLED] Select lines by clicking line number
 #+BEGIN_SRC emacs-lisp :tangle yes
-(defun line-at-click ()
-  (save-excursion
-  (let ((click-y (cdr (cdr (mouse-position))))
-      (line-move-visual-store line-move-visual))
-    (setq line-move-visual t)
-    (goto-char (window-start))
-    (next-line (1- click-y))
-    (setq line-move-visual line-move-visual-store)
-    (1+ (line-number-at-pos)))))
-
-(defun md-select-linum ()
-  (interactive)
-  (goto-line (line-at-click))
-  (set-mark (point))
-  (setq *linum-mdown-line*
-    (line-number-at-pos)))
-
-(defun mu-select-linum ()
-  (interactive)
-  (when *linum-mdown-line*
-  (let (mu-line)
-    (setq mu-line (line-at-click))
-    (goto-line (max *linum-mdown-line* mu-line))
-    (set-mark (line-end-position))
-    (goto-line (min *linum-mdown-line* mu-line))
-    (setq *linum-mdown*
-      nil))))
-
-(bind-keys ("<left-margin> <down-mouse-1>" . md-select-linum)
-           ("<left-margin> <mouse-1>" . mu-select-linum)
-           ("<left-margin> <S-mouse-1>" . mu-select-linum)
-           ("<left-margin> <drag-mouse-1>" . mu-select-linum))
+;(defun line-at-click ()
+;  (save-excursion
+;  (let ((click-y (cdr (cdr (mouse-position))))
+;      (line-move-visual-store line-move-visual))
+;    (setq line-move-visual t)
+;    (goto-char (window-start))
+;    (next-line (1- click-y))
+;    (setq line-move-visual line-move-visual-store)
+;    (1+ (line-number-at-pos)))))
+;
+;(defun md-select-linum ()
+;  (interactive)
+;  (goto-line (line-at-click))
+;  (set-mark (point))
+;  (setq *linum-mdown-line*
+;    (line-number-at-pos)))
+;
+;(defun mu-select-linum ()
+;  (interactive)
+;  (when *linum-mdown-line*
+;  (let (mu-line)
+;    (setq mu-line (line-at-click))
+;    (goto-line (max *linum-mdown-line* mu-line))
+;    (set-mark (line-end-position))
+;    (goto-line (min *linum-mdown-line* mu-line))
+;    (setq *linum-mdown*
+;      nil))))
+;
+;(bind-keys ("<left-margin> <down-mouse-1>" . md-select-linum)
+;           ("<left-margin> <mouse-1>" . mu-select-linum)
+;           ("<left-margin> <S-mouse-1>" . mu-select-linum)
+;           ("<left-margin> <drag-mouse-1>" . mu-select-linum))
 #+END_SRC
 ** Modeline
 *** Ensure buffer names are unique
@@ -956,8 +955,8 @@ Switch to another buffer:
 
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package ido-completing-read+
-  :defer 1
-  :require (ido recentf memoize)
+  :after recentf
+  :require (ido memoize)
   :config
   (progn
     (ido-mode t)
@@ -1280,6 +1279,7 @@ file of a buffer in an external program."
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package recentf
   :defer 2
+  :require (recentf-ext sync-recentf)
   :init (recentf-mode)
   :custom
   (recentf-exclude
@@ -1298,8 +1298,8 @@ file of a buffer in an external program."
   (recentf-max-menu-items 25)
   (recentf-max-saved-items 200)
   :config
-  (run-at-time nil (* 2 60) 'recentf-save-list)
-  (run-at-time nil (* 5 60) 'recentf-cleanup))
+    (setq recentf-save-file "~/Dropbox/.emacs.persist/.recentf"
+          recentf-auto-cleanup 60))
 #+END_SRC
 ** Moving Around
 *** Do What I Mean in relation to indentation
