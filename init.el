@@ -7,7 +7,6 @@
 ;; Disable writing package settings to init.el
 (defun package--save-selected-packages (&rest opt) nil)
 
-
 (setq package-enable-at-startup t)
 (setq package-archives '(("gnu" . "https://elpa.gnu.org/packages/")
                          ("melpa-stable" . "https://stable.melpa.org/packages/")
@@ -17,13 +16,23 @@
 (setq tls-checktrust t)
 (setq gnutls-verify-error t)
 
+(defun ensure-package-installed (&rest packages)
+  "Assure every package is installed, ask for installation if it’s not.
+
+Return a list of installed packages or nil for every skipped package."
+  (mapcar
+   (lambda (package)
+     (if (package-installed-p package)
+         nil
+         (package-install package)
+         ))
+   packages))
+
+;; activate installed packages
+(package-initialize)
+
 (eval-when-compile
-  (package-initialize))
-(eval-when-compile
-  (if (not (package-installed-p 'req-package))
-    (progn
-      (package-refresh-contents)
-      (package-install 'req-package))))
+  (ensure-package-installed 'req-package 'delight 'hydra))
 
 (require 'req-package)
 
@@ -38,15 +47,4 @@
 ;; FIXME - this should be in config.org,
 ;; but doesn't work there
 (setq disabled-command-hook nil)
-(custom-set-variables
- ;; custom-set-variables was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- '(package-selected-packages (quote (ruby-end el-get req-package))))
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- )
+

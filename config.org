@@ -197,8 +197,8 @@ is causing emacs to block for a significant amount of time.
   (dashboard-setup-startup-hook)
   (setq dashboard-startup-banner 'logo
         dashboard-banner-logo-title "Dashboard"
-        dashboard-items '((projects . 15)
-                          (recents  . 10)
+        dashboard-items '((recents  . 10)
+                          (projects . 10)
                           (bookmarks . 5))))
 #+END_SRC
 ** Package management
@@ -237,52 +237,6 @@ My personal theme: https://github.com/OldhamMade/leiptr-them
 #+BEGIN_SRC emacs-lisp :tangle yes
 (set-face-attribute 'default nil :font "SFMono Nerd Font:pixelsize=10:weight=normal:slant=normal:width=normal:spacing=100:scalable=true")
 #+END_SRC
-*** [DISABLED] Add line numbers for all buffers
-#+BEGIN_SRC emacs-lisp :tangle yes
-;(req-package hlinum
-;  :defer 0.5
-;  :config
-;    (global-linum-mode 1)
-;    (setq linum-format "%4d\u23B9")
-;    (setq column-number-mode 1)
-;    (hlinum-activate)
-;    )
-#+END_SRC
-*** [DISABLED] Select lines by clicking line number
-#+BEGIN_SRC emacs-lisp :tangle yes
-;(defun line-at-click ()
-;  (save-excursion
-;  (let ((click-y (cdr (cdr (mouse-position))))
-;      (line-move-visual-store line-move-visual))
-;    (setq line-move-visual t)
-;    (goto-char (window-start))
-;    (next-line (1- click-y))
-;    (setq line-move-visual line-move-visual-store)
-;    (1+ (line-number-at-pos)))))
-;
-;(defun md-select-linum ()
-;  (interactive)
-;  (goto-line (line-at-click))
-;  (set-mark (point))
-;  (setq *linum-mdown-line*
-;    (line-number-at-pos)))
-;
-;(defun mu-select-linum ()
-;  (interactive)
-;  (when *linum-mdown-line*
-;  (let (mu-line)
-;    (setq mu-line (line-at-click))
-;    (goto-line (max *linum-mdown-line* mu-line))
-;    (set-mark (line-end-position))
-;    (goto-line (min *linum-mdown-line* mu-line))
-;    (setq *linum-mdown*
-;      nil))))
-;
-;(bind-keys ("<left-margin> <down-mouse-1>" . md-select-linum)
-;           ("<left-margin> <mouse-1>" . mu-select-linum)
-;           ("<left-margin> <S-mouse-1>" . mu-select-linum)
-;           ("<left-margin> <drag-mouse-1>" . mu-select-linum))
-#+END_SRC
 ** Modeline
 *** Ensure buffer names are unique
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -291,10 +245,6 @@ My personal theme: https://github.com/OldhamMade/leiptr-them
   (setq uniquify-buffer-name-style 'forward))
 
 (add-hook 'after-init-hook 'my/load-uniquify)
-#+END_SRC
-*** Use =diminish= to reduce noise
-#+BEGIN_SRC emacs-lisp :tangle yes
-(req-package diminish)
 #+END_SRC
 *** Display total lines in file
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -395,7 +345,8 @@ like flx won't pause.
 #+BEGIN_SRC emacs-lisp :tangle yes
 (setq mac-command-modifier 'alt
       mac-option-modifier 'meta
-      mac-command-modifier 'hyper)
+      mac-command-modifier 'hyper
+      mac-right-option-modifier nil)
 #+END_SRC
 *** macOS standard keybindings
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -538,7 +489,7 @@ into a family of short bindings with a common prefix.
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package highlight-indentation
   :defer 2
-  :diminish ""
+  :delight
   :config
     (set-face-background 'highlight-indentation-face "#222")
     (add-hook 'prog-mode-hook 'highlight-indentation-mode)
@@ -551,7 +502,7 @@ into a family of short bindings with a common prefix.
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package rainbow-delimiters
   :defer 1
-  :diminish ""
+  :delight
   :config
   (progn
     (add-hook 'prog-mode-hook 'rainbow-delimiters-mode)
@@ -604,7 +555,7 @@ easier to visually search
 #+BEGIN_SRC emacs-lisp :tangle no
 (req-package volatile-highlights
   :defer 1
-  :diminish volatile-highlights-mode
+  :delight
   :config (volatile-highlights-mode t))
 #+END_SRC
 ** Buffers
@@ -923,9 +874,10 @@ Switch to another buffer:
   ("/" ibuffer-filter-disable "disable")
   ("b" hydra-ibuffer-main/body "back" :color blue))
 
-(add-hook 'after-init-hook
-  (lambda ()
-    (define-key ibuffer-mode-map "?" 'hydra-ibuffer-main/body)))
+;(use-package ibuffer
+;  :hook
+;    (lambda ()
+;      (define-key ibuffer-mode-map "?" 'hydra-ibuffer-main/body)))
 #+END_SRC
 *** Rotate buffers
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -949,6 +901,41 @@ Switch to another buffer:
                  (p2 (window-point w2)))
             (set-window-buffer-start-and-point w1 b2 s2 p2)
             (set-window-buffer-start-and-point w2 b1 s1 p1)))))))
+#+END_SRC
+** Windows
+*** Allow "zooming" a buffer to full-screen
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package zoom-window
+  :init (custom-set-variables
+          '(zoom-window-mode-line-color "DarkGreen"))
+  :bind ("C-x C-z" . zoom-window-zoom))
+#+END_SRC
+*** Perspectives (workspaces)
+#+BEGIN_SRC emacs-lisp :tangle yes
+  (defhydra hydra-persp (:color pink :hint nil :timeout 3.0)
+    "
+   ^Perspectives^
+  -^------------^---------------------^-^---------------------------------------
+   [_s_] Switch project              [_r_] Rename perspective
+   [_S_] Switch/create perspective   [_k_] Kill/remove buffer from perspective
+   [_n_] Next perspective            [_K_] Kill perspective
+   [_p_] Previous perspective        [_q_] Quit
+  "
+    ("s" projectile-persp-switch-project)
+    ("S" persp-switch)
+    ("n" persp-next)
+    ("p" persp-prev)
+    ("r" persp-rename)
+    ("k" persp-remove-buffer)
+    ("K" persp-kill)
+    ("q" nil)
+    )
+
+  (req-package perspective
+    :require (persp-projectile)
+    :defer 0.5
+    :bind ("H-P" . hydra-persp/body)
+    :init (persp-mode))
 #+END_SRC
 ** Navigation
 *** IDO
@@ -1012,7 +999,7 @@ are seen as projects by default.
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package projectile
   :ensure t
-  :diminish ""
+  :delight
   :custom
     (projectile-enable-caching t)
   :config
@@ -1076,10 +1063,16 @@ are seen as projects by default.
 #+END_SRC
 ** Files
 *** Dired
-
+**** Better Dired output
 #+BEGIN_SRC emacs-lisp :tangle yes
-(req-package dired+
-  :load-path "~/.emacs.d/custom/dired+")
+(setq-default dired-listing-switches "-aoGph")
+#+END_SRC
+**** Make Dired use the same buffer when navigating directories
+#+BEGIN_SRC emacs-lisp :tangle yes
+(define-key dired-mode-map (kbd "RET")
+  'dired-find-alternate-file)
+(define-key dired-mode-map (kbd "^")
+  (lambda () (interactive) (find-alternate-file "..")))
 #+END_SRC
 
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1229,7 +1222,7 @@ file of a buffer in an external program."
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package super-save
   :defer 1
-  :diminish ""
+  :delight
   :config
     (progn
       (super-save-mode +1)
@@ -1270,7 +1263,7 @@ file of a buffer in an external program."
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package whitespace-cleanup-mode
   :defer 2
-  :diminish whitespace-cleanup-mode
+  :delight
   :config (global-whitespace-cleanup-mode))
 #+END_SRC
 
@@ -1280,12 +1273,14 @@ file of a buffer in an external program."
 (req-package recentf
   :defer 2
   :require (recentf-ext sync-recentf)
-  :init (recentf-mode)
+  :init
+  (setq sync-recentf-marker (expand-file-name "~/Dropbox/.emacs.persist/.sync-recentf-marker"))
   :custom
   (recentf-exclude
     (list "COMMIT_EDITMSG"
           (expand-file-name package-user-dir)
           (expand-file-name "~/.emacs.d/config.el")
+          (expand-file-name "~/Dropbox/.emacs.persist/.sync-recentf-marker")
           (expand-file-name "~/Dropbox/.emacs.persist/.breadcrumbs")
           (expand-file-name "~/Dropbox/.emacs.persist/.scratch")
           "ido\\.last"
@@ -1297,9 +1292,9 @@ file of a buffer in an external program."
           "/tmp/"))
   (recentf-max-menu-items 25)
   (recentf-max-saved-items 200)
-  :config
-    (setq recentf-save-file "~/Dropbox/.emacs.persist/.recentf"
-          recentf-auto-cleanup 60))
+  (recentf-save-file "~/Dropbox/.emacs.persist/.recentf")
+  (recentf-auto-cleanup 60)
+  )
 #+END_SRC
 ** Moving Around
 *** Do What I Mean in relation to indentation
@@ -1350,7 +1345,7 @@ the line. Repeated use of `C-a' toggles between these two positions.
   :load-path "~/.emacs.d/custom/breadcrumb"
   :defer 2
   :require (hydra)
-  :diminish ""
+  :delight
   :config
     (setq bc-bookmark-file (expand-file-name "~/Dropbox/.emacs.persist/.breadcrumbs"))
     (global-set-key (kbd "H-b") 'hydra-bookmarks/body)
@@ -1361,11 +1356,11 @@ the line. Repeated use of `C-a' toggles between these two positions.
 (req-package avy  ;; Avy is a package for jumping to visible text using a char-based decision tree
   :defer 1
   :require (hydra)
-  :diminish "")
+  :delight)
 
 (req-package goto-last-change
   :defer 3
-  :diminish "")
+  :delight)
 
 (defun occur-dwim ()
   "Call `occur' with a sane default, chosen as the thing under point or selected region"
@@ -1436,7 +1431,7 @@ the line. Repeated use of `C-a' toggles between these two positions.
 )
 (req-package dumb-jump
   :require (noccur)
-  :diminish ""
+  :delight
   :defer 2
   :bind ("H-j" . hydra-jump/body)
   :config
@@ -1446,6 +1441,12 @@ the line. Repeated use of `C-a' toggles between these two positions.
 #+END_SRC
 
 ** Editing
+*** Enable prettify-symbols-mode for nicer views
+
+#+BEGIN_SRC emacs-lisp :tangle yes
+(global-prettify-symbols-mode +1)
+#+END_SRC
+
 *** Enable automatic indenting
 
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1470,7 +1471,7 @@ the line. Repeated use of `C-a' toggles between these two positions.
 (req-package undo-tree
   :defer 1
   :ensure undo-tree
-  :diminish ""
+  :delight
   :config (global-undo-tree-mode))
 #+END_SRC
 
@@ -1510,7 +1511,7 @@ Note: Transient-mark-mode needs to be reenabled after enabling CUA-mode
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package autopair
   :defer 0.5
-  :diminish autopair-mode
+  :delight
   :config
   (progn
    (autopair-global-mode)
@@ -1585,7 +1586,7 @@ KEYBINDING: "M-y"
 *** Expand region
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(defhydra hydra-expand-region (:color pink :hint nil :timeout 5.0)
+(defhydra hydra-expand-region (:hint nil :timeout 2.0)
   "
  ^Expand Region^
 ---^-^-------------^-^-----------------^-^--------------
@@ -1603,12 +1604,19 @@ KEYBINDING: "M-y"
   ("o" er/mark-outer-tag :exit t)
   ("q" nil :exit t)
 )
+
+(defun my/expand-region-init ()
+  "Expand region then show menu for more options."
+  (interactive)
+  (er/expand-region 1)
+  (hydra-expand-region/body))
+
 (req-package expand-region
   :defer 1
   :require (hydra)
-  :diminish ""
+  :delight
   :config
-    (global-set-key (kbd "H-e") 'hydra-expand-region/body)
+    (global-set-key (kbd "H-e") 'my/expand-region-init)
 )
 #+END_SRC
 
@@ -1664,7 +1672,7 @@ KEYBINDING: "M-y"
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package move-text
   :defer 1
-  :diminish "⥮"
+  :delight "⥮"
   :config (move-text-default-bindings))
 #+END_SRC
 
@@ -1766,7 +1774,7 @@ there's a region, all lines that region covers will be duplicated."
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package anzu
   :defer 1
-  :diminish anzu-mode
+  :delight
   :config (global-anzu-mode +1))
 #+END_SRC
 
@@ -1875,7 +1883,7 @@ there's a region, all lines that region covers will be duplicated."
 **** Enable CamelCase awareness for all programming modes
 #+BEGIN_SRC emacs-lisp :tangle yes
 (add-hook 'prog-mode-hook 'subword-mode)
-(eval-after-load "subword" '(diminish 'subword-mode))
+(eval-after-load "subword" '(delight 'subword-mode))
 #+END_SRC
 **** Do What I Mean when commenting lines
 #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1921,7 +1929,7 @@ Disabled for now as it causes emacs to hang
   :ensure flycheck
   :config (add-hook 'after-init-hook 'global-flycheck-mode)
   :defer 1
-  :diminish " ✓ "
+  :delight " ✓ "
   :config
   (progn
     (add-hook 'after-init-hook 'global-flycheck-mode)
@@ -1972,7 +1980,7 @@ A hydra for testing with nose.
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package jinja2-mode
   :defer 2
-  :diminish ""
+  :delight
   :mode ("\\.jinja2?\\'" . jinja2-mode))
 (add-to-list 'auto-mode-alist '("\\.j2\\'" . jinja2-mode))
 (setq web-mode-engines-alist
@@ -1986,13 +1994,36 @@ A hydra for testing with nose.
 (req-package alchemist
   :requires (elixir-mode ruby-end)
   :defer 2
+  :delight
+    (emacs-lisp-mode "elisp")
+    (elixir-mode "[ex]")
+	(alchemist-mode "[al]")
+	(alchemist-hex-mode "[alhex]")
+	(alchemist-test-mode "[altest]")
+	(ruby-end-mode "")
   :mode ("\\.exs?\\'" . alchemist-mode))
+
+(defun elixir-mode-prettify-symbols-hook ()
+  (setq-local
+   prettify-symbols-alist
+   (append
+	'(("->" . ?→)
+	  ("=>" . ?⇒)
+	  ("<-" . ?←)
+	  ("<=" . ?⇐)
+	  (">=" . ?≥)
+	  ("=<" . ?≤)
+	  ("!=" . ?≠)
+	  ("fn" . ?ƒ))
+	prettify-symbols-alist)))
+
 
 (add-hook 'elixir-mode-hook 'alchemist-mode)
 (add-hook 'elixir-mode-hook 'company-mode)
+(add-hook 'elixir-mode-hook 'elixir-mode-prettify-symbols-hook)
 (add-hook 'elixir-mode-hook
           (lambda ()
-            (setq alchemist-mix-command ". ~/.zshrc && mix" ;; source /usr/local/Cellar/asdf/0.4.3/asdf.sh
+            (setq alchemist-mix-command ". ~/.zshrc && mix"
                   alchemist-execute-command ". ~/.zshrc && elixir"
                   alchemist-iex-program-name ". ~/.zshrc && iex"
                   alchemist-compile-command ". ~/.zshrc && elixirc")
@@ -2002,16 +2033,6 @@ A hydra for testing with nose.
                  nil)
             (ruby-end-mode 1)
             ))
-
-(req-package delight
-  :config
-    (progn
-      (delight '((emacs-lisp-mode "elisp" :major)
-                 (elixir-mode "[ex]" elixir)
-                 (alchemist-mode "[al]" alchemist)
-                 (alchemist-hex-mode "[alhex]" alchemist)
-                 (alchemist-test-mode "[altest]" alchemist)
-                 (ruby-end-mode "" ruby-end)))))
 #+END_SRC
 
 **** Add support for .eex files
@@ -2032,10 +2053,81 @@ A hydra for testing with nose.
 *** Erlang
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-  ;; (req-package erlang-mode
-  ;;              :requires (company-erlang)
-  ;;              :defer t
-  ;;              :mode ("\\.erl\\'" . erlang-mode))
+
+  (defun parent-directory (dir)
+    (unless (equal "/" dir)
+      (file-name-directory (directory-file-name dir))))
+
+  (defun find-file-in-hierarchy (current-dir fname)
+    "Search for a file named FNAME upwards through the directory hierarchy, starting from CURRENT-DIR"
+    (let ((file (concat current-dir fname))
+          (parent (parent-directory (expand-file-name current-dir))))
+      (if (file-exists-p file)
+          file
+        (when parent
+          (find-file-in-hierarchy parent fname)))))
+
+  (defun find-dir-in-hierarchy (current-dir dname)
+    "Search for a dir named DNAME upwards through the directory hierarchy, starting from CURRENT-DIR"
+    (let ((dir (concat current-dir dname))
+          (parent (parent-directory (expand-file-name current-dir))))
+      (if (file-directory-p dir)
+          dir
+        (when parent
+          (find-dir-in-hierarchy parent dname)))))
+
+  (defun find-include-dir ()
+    "Search for the next available include dir from START."
+    (let ((idir (find-dir-in-hierarchy (buffer-file-name) "include")))
+      (if idir (concat "-I" idir) "")))
+
+  (defun find-zotonic-include-dir ()
+    "Search for the next available zotonic include dir from START."
+    (let ((zdir (find-dir-in-hierarchy (file-name-directory buffer-file-name) (concat (file-name-as-directory "zotonic") "include"))))
+      (if zdir (concat "-I" zdir) "")))
+
+  (defun my/define-erlang-flychecker ()
+    (flycheck-define-checker erlang-otp
+      "An Erlang syntax checker using the Erlang interpreter."
+      :command ("~/.asdf/shims/erlc" "-o" temporary-directory "-Wall"
+                (option-list "-I" flycheck-erlang-include-path)
+                (eval (find-zotonic-include-dir))
+                source)
+      :error-patterns
+      ((warning line-start (file-name) ":" line ": Warning:" (message) line-end)
+       (error line-start (file-name) ":" line ": " (message) line-end))
+      :modes erlang-mode))
+
+  (defun erlang-mode-flycheck-hook ()
+    (flycheck-select-checker 'erlang-otp)
+              (flycheck-mode))
+
+  (defun erlang-mode-prettify-symbols-hook ()
+    (setq-local
+     prettify-symbols-alist
+     (append
+      '(("->" . ?→)
+        ("=>" . ?⇒)
+        ("<-" . ?←)
+        ("<=" . ?⇐)
+        (">=" . ?≥)
+        ("=<" . ?≤)
+        ("=/=" . ?≠)
+        ("fun" . ?ƒ))
+      prettify-symbols-alist)))
+
+  (req-package erlang
+    :after (flycheck)
+    :init (my/define-erlang-flychecker)
+    :mode ("\\.erl\\'" . erlang-mode)
+    :hook ((erlang-mode . erlang-mode-flycheck-hook)
+           (erlang-mode . erlang-mode-prettify-symbols-hook)
+           (erlang-mode . company-mode)))
+
+  (add-to-list 'load-path (expand-file-name "custom/zotonic" dotfiles-dir))
+  (require 'zotonic-tpl-mode)
+  (add-to-list 'auto-mode-alist '("\\.tpl\\'" . zotonic-tpl-mode))
+
 #+END_SRC
 
 *** Nim
@@ -2166,11 +2258,11 @@ I often use Elm for front-end development.
 	  )
 #+END_SRC
 
-*** Utilities
 *** Sass/Scss
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package sass-mode
   :defer 2
+  :delight "sass"
   :mode ("\\.s(c|a)ss\\'" . sass-mode)
   :requires (flycheck-sass))
 #+END_SRC
@@ -2180,12 +2272,12 @@ I often use Elm for front-end development.
   :defer 2
   :mode ("\\.ya?ml\\'" . yaml-mode)
   :requires (flycheck-yaml))
-(add-to-list 'auto-mode-alist '("\\.raml\\'" . yaml-mode))
 #+END_SRC
 *** Markdown
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package markdown-mode
   :defer 2
+  :delight "md"
   :mode ("\\.md\\'" . markdown-mode)
   :requires (flycheck-markdown))
 #+END_SRC
@@ -2193,6 +2285,14 @@ I often use Elm for front-end development.
 #+BEGIN_SRC emacs-lisp :tangle yes
 (req-package dockerfile-mode
   :defer 2)
+#+END_SRC
+*** RAML
+#+BEGIN_SRC emacs-lisp :tangle yes
+(req-package raml-mode
+  :load-path "custom/raml-mode"
+  :defer 2
+  :init (setq raml-indent-offset 2)
+  :mode "\\.raml\\'")
 #+END_SRC
 ** Terminal
 *** Multi-term
