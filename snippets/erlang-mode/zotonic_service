@@ -1,0 +1,31 @@
+# -*- mode: snippet -*-
+# name: zotonic service template
+# key: zserv
+# --
+%% Copyright (C) Channel.Me B.V. - All Rights Reserved
+%% Unauthorized copying of this file, via any medium is strictly prohibited
+%% Proprietary and confidential
+%%
+%% Written by PB Oldham <phillip@channel.me>
+
+-module(service_$1).
+-author("Phillip Oldham <phillip@channel.me>").
+
+-svc_title("$2").
+-svc_needauth(${3:true}).
+
+-export([process_get/1, process_post/1]).
+
+-include_lib("zotonic.hrl").
+
+process_get(_Context) ->
+    %% $0Do some processing here...
+    Response = [],  %% example: [{count, 12310}, {key, Value}],
+    z_convert:to_json(Response).
+
+process_post(Context) ->
+    %% Id = z_context:get_q("id", Context),
+    %% Do some processing here...
+    Response = [],  %% example: [{result, Id}],
+    z_convert:to_json(Response).
+

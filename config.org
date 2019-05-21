@@ -641,7 +641,7 @@ easier to visually search
 **** Set CMD + "up"/"down" to switch between buffers
 
 #+BEGIN_SRC emacs-lisp :tangle yes
-(defun custom-ignore-buffer (str)
+(defun my/custom-ignore-buffer (str)
   (or
    ;;buffers I don't want to switch to
    (string-match "\\*Buffer List\\*" str)
@@ -657,6 +657,9 @@ easier to visually search
    (string-match "^\\*SPEEDBAR\\*" str)
    (string-match "^ " str)
 
+   ;; TODO: check if str not in current active perspective
+   ;; see: (persp-buffers persp-curr)
+
    ;;Test to see if the window is visible on an existing visible frame.
    ;;Because I can always ALT-TAB to that visible frame, I never want to
    ;;Ctrl-TAB to that buffer in the current frame.  That would cause
@@ -670,14 +673,14 @@ easier to visually search
           (visible-frame-list)))
    ))
 
-(defun custom-switch-buffer (ls)
+(defun my/custom-switch-buffer (ls)
   "Switch to next buffer in ls skipping unwanted ones."
   (let* ((ptr ls)
          bf bn go
          )
     (while (and ptr (null go))
       (setq bf (car ptr)  bn (buffer-name bf))
-      (if (null (custom-ignore-buffer bn))        ;skip over
+      (if (null (my/custom-ignore-buffer bn))        ;skip over
    (setq go bf)
         (setq ptr (cdr ptr))
         )
@@ -685,20 +688,20 @@ easier to visually search
     (if go
         (switch-to-buffer go))))
 
-(defun custom-prev-buffer ()
+(defun my/custom-prev-buffer ()
   "Switch to previous buffer in current window."
   (interactive)
-  (custom-switch-buffer (reverse (buffer-list))))
+  (my/custom-switch-buffer (reverse (buffer-list))))
 
-(bind-key "H-<down>" 'custom-prev-buffer)
+(bind-key "H-<down>" 'my/custom-prev-buffer)
 
-(defun custom-next-buffer ()
+(defun my/custom-next-buffer ()
   "Switch to the other buffer (2nd in list-buffer) in current window."
   (interactive)
   (bury-buffer (current-buffer))
-  (custom-switch-buffer (buffer-list)))
+  (my/custom-switch-buffer (buffer-list)))
 
-(bind-key "H-<up>" 'custom-next-buffer)
+(bind-key "H-<up>" 'my/custom-next-buffer)
 #+END_SRC
 
 **** "Other" buffers using Hydra
@@ -912,22 +915,22 @@ Switch to another buffer:
 #+END_SRC
 *** Perspectives (workspaces)
 #+BEGIN_SRC emacs-lisp :tangle yes
-  (defhydra hydra-persp (:color pink :hint nil :timeout 3.0)
+  (defhydra hydra-persp (:hint nil :timeout 5.0)
     "
    ^Perspectives^
   -^------------^---------------------^-^---------------------------------------
    [_s_] Switch project              [_r_] Rename perspective
-   [_S_] Switch/create perspective   [_k_] Kill/remove buffer from perspective
-   [_n_] Next perspective            [_K_] Kill perspective
+   [_S_] Switch/create perspective   [_k_] Kill perspective
+   [_n_] Next perspective            [_K_] Kill/remove buffer from perspective
    [_p_] Previous perspective        [_q_] Quit
   "
-    ("s" projectile-persp-switch-project)
-    ("S" persp-switch)
+    ("s" projectile-persp-switch-project :color blue)
+    ("S" persp-switch :color blue)
     ("n" persp-next)
     ("p" persp-prev)
-    ("r" persp-rename)
-    ("k" persp-remove-buffer)
-    ("K" persp-kill)
+    ("r" persp-rename :color blue)
+    ("K" persp-remove-buffer :color blue)
+    ("k" persp-kill :color blue)
     ("q" nil)
     )
 
@@ -1026,10 +1029,18 @@ are seen as projects by default.
              magit-log
              magit-commit
              magit-stage-file)
-  :hook (magit-mode . turn-on-magit-gitflow)
+  :hook ((magit-mode . turn-on-magit-gitflow)
+         (magit-diff-visit-file . (lambda ()
+                                   (when smerge-mode
+                                     (my/smerge-hydra/body)))))
   :config
   (setq magit-branch-arguments nil)
-  (setq magit-push-arguments '("--set-upstream"))
+  (setq magit-diff-paint-whitespace t)
+  (setq magit-diff-highlight-indentation (quote (("" . tabs))))
+  (setq magit-fetch-arguments (quote ("--prune")))
+  (setq magit-pull-arguments (quote ("--rebase")))
+  (setq magit-push-arguments (quote ("--set-upstream")))
+  (setq magit-log-arguments (quote ("--graph" "--color" "--decorate" "-n256")))
   (bind-keys* ("H-M" . magit-status))
   (magit-todos-mode t)
 
@@ -1059,7 +1070,42 @@ are seen as projects by default.
 (add-hook 'projectile-switch-project-hook
           #'magit-set-repo-dirs-from-projectile)
 
-(setq smerge-command-prefix "C-c m")
+(defhydra my/smerge-hydra
+    (:color pink :hint nil :post (smerge-auto-leave))
+    "
+ ^Move^     ^Keep^            ^Diff^               ^Other^
+-^^---------^^----------------^^-------------------^^-------
+ [_n_]ext   [_b_]ase          [_<_] upper/base     [_C_]ombine
+ [_p_]rev   [_u_]pper         [_=_] upper/lower    [_r_]esolve
+ ^^         [_l_]ower         [_>_] base/lower     [_k_]ill current
+ ^^         [_a_]ll           [_R_]efine
+ ^^         [_RET_] current   [_E_]diff
+-^^---------^^----------------^^-------------------^^-------
+"
+    ("n" smerge-next)
+    ("p" smerge-prev)
+    ("b" smerge-keep-base)
+    ("u" smerge-keep-upper)
+    ("l" smerge-keep-lower)
+    ("a" smerge-keep-all)
+    ("RET" smerge-keep-current)
+    ("\C-m" smerge-keep-current)
+    ("<" smerge-diff-base-upper)
+    ("=" smerge-diff-upper-lower)
+    (">" smerge-diff-base-lower)
+    ("R" smerge-refine)
+    ("E" smerge-ediff)
+    ("C" smerge-combine-with-next)
+    ("r" smerge-resolve)
+    ("k" smerge-kill-current)
+    ("s" (lambda ()
+            (interactive)
+            (save-buffer)
+            (kill-buffer))
+     "save & close" :color blue)
+    ("q" nil "cancel" :color blue))
+
+(setq smerge-command-prefix "\C-c m")
 #+END_SRC
 ** Files
 *** Dired

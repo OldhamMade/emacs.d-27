@@ -1,0 +1,23 @@
+# -*- mode: snippet -*-
+# name: zotonic module template
+# key: zmod
+# --
+%% Copyright (C) Channel.Me B.V. - All Rights Reserved
+%% Unauthorized copying of this file, via any medium is strictly prohibited
+%% Proprietary and confidential
+%%
+%% Written by PB Oldham <phillip@channel.me>
+
+-module(mod_$1).
+-author("Phillip Oldham <phillip@channel.me>").
+
+-mod_title("$2").
+-mod_description("$3").
+-mod_depends([base]).
+-mod_prio(${4:5000}).
+
+-export([]).  %% TODO: review exports
+
+-include_lib("zotonic.hrl").
+
+$0
