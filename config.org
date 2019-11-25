@@ -60,6 +60,12 @@
 
        (add-hook 'after-init-hook 'my/configure-path)
      #+END_SRC
+**** Enable direnv
+     #+BEGIN_SRC emacs-lisp :tangle yes
+       (req-package direnv
+         :config
+         (direnv-mode))
+     #+END_SRC
 ** Startup
 *** Reduce GC on startup
     Emacs will run garbage collection after `gc-cons-threshold' bytes of
@@ -226,6 +232,13 @@
     #+BEGIN_SRC emacs-lisp :tangle yes
       (req-package use-package-chords)
     #+END_SRC
+** Environment
+*** =exec-path-from-shell=
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (req-package exec-path-from-shell
+        :config (when (memq window-system '(mac ns x))
+          (exec-path-from-shell-initialize)))
+    #+END_SRC
 ** Interface
 *** Theme
     My personal theme: https://github.com/OldhamMade/leiptr-them
@@ -354,6 +367,13 @@
        ("H-z" . undo)
        ("H-S-z" . redo)
        ("H-Z" . redo)
+       ;; moving around
+       ("<next>" . (lambda () (interactive)
+                     (condition-case nil (scroll-up)
+                       (end-of-buffer (goto-char (point-max))))))
+       ("<prior>" . (lambda () (interactive)
+                      (condition-case nil (scroll-down)
+                        (beginning-of-buffer (goto-char (point-min))))))
        ;; Select all
        ("H-a" . mark-whole-buffer)
        ;; cut
@@ -458,7 +478,6 @@
         (key-chord-define-global "bv" 'bm-previous)
         (key-chord-define-global "d3" 'dash-at-point)
         (key-chord-define-global "R$" 'deadgrep)
-        (key-chord-define-global "m;" 'multiple-cursors-hydra/body)
         (key-chord-define-global "w2" 'avy-goto-word-1)
         (key-chord-define-global "j9" 'avy-goto-word-1)
         )
@@ -942,7 +961,8 @@
         :require (persp-projectile)
         :defer 0.5
         :bind ("H-P" . hydra-persp/body)
-        :init (persp-mode))
+        :config
+          (persp-mode))
     #+END_SRC
 ** Navigation
 *** IDO
@@ -1044,14 +1064,14 @@
                                           (when smerge-mode
                                             (my/smerge-hydra/body)))))
         :config
-        (setq magit-branch-arguments nil)
-        (setq magit-diff-paint-whitespace t)
-        (setq magit-diff-highlight-indentation (quote (("" . tabs))))
-        (setq magit-fetch-arguments (quote ("--prune")))
-        (setq magit-pull-arguments (quote ("--rebase")))
-        (setq magit-push-arguments (quote ("--set-upstream")))
-        (setq magit-log-arguments (quote ("--graph" "--color" "--decorate" "-n256")))
-        (bind-keys* ("H-M" . magit-status))
+        (setq magit-branch-arguments nil
+              magit-branch-read-upstream-first 'fallback
+              magit-diff-paint-whitespace t
+              magit-diff-highlight-indentation (quote (("" . tabs)))
+              magit-fetch-arguments (quote ("--prune"))
+              magit-pull-arguments (quote ("--rebase"))
+              magit-push-arguments (quote ("--set-upstream"))
+              magit-log-arguments (quote ("--graph" "--color" "--decorate" "-n256")))
         (magit-todos-mode t)
 
         ;; `C-x g' shows magit status if within a repo, or list all repos
@@ -1317,6 +1337,15 @@
       (setq require-final-newline t)
     #+END_SRC
 
+*** Clean whitespace intelligently on key-press
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (req-package shrink-whitespace
+        :defer 2
+        :delight
+        :config (global-set-key (kbd "H-/") 'shrink-whitespace))
+    #+END_SRC
+
 *** Clean whitespace intelligently on save
 
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1383,30 +1412,36 @@
       (defhydra hydra-bookmarks (:color pink :hint nil :timeout 3.0)
         "
        ^Bookmarks^
-      -^---------^--------------------------------------------------
-        [_b_] toggle bookmark         [_l_] list all
-        [_n_] jump to local next      [_N_] jump to global next
-        [_p_] jump to local previous  [_P_] jump to global previous
-        [_c_] jump to current         [_K_] kill/clear all bookmarks
-      -^---------^--------------------------------------------------
+      -^---------^-----------------------------------------------------------------------
+        [_b_] toggle bookmark   [_n_] jump to next             [_L_] list all
+        [_r_] set using regex   [_p_] jump to previous         [_k_] clear current buffer
+        [_R_] regex in region   [_f_] jump to first            [_K_] clear all buffers
+         ^ ^                    [_l_] jump to last
+         ^ ^                    [_a_] toggle jump all buffers
+      -^---------^-----------------------------------------------------------------------
       "
-        ("b" bc-set)
-        ("l" bc-list)
-        ("n" bc-local-next)
-        ("p" bc-local-previous)
-        ("c" bc-goto-current)
-        ("N" bc-next)
-        ("P" bc-previous)
-        ("K" bc-clear)
+        ("b" bm-toggle)
+        ("n" bm-next)
+        ("p" bm-previous)
+        ("f" bm-first)
+        ("l" bm-last)
+        ("L" bm-show-all)
+        ("k" bm-remove-all-current-buffer)
+        ("K" bm-remove-all-all-buffers)
+        ("a" bm-toggle-cycle-all-buffers)
+        ("r" bm-bookmark-regexp :color blue)
+        ("R" bm-bookmark-regexp-region :color blue)
         ("q" nil)
         )
-      (req-package breadcrumb
-        :load-path "~/.emacs.d/custom/breadcrumb"
+      (req-package bm
         :defer 2
         :require (hydra)
         :delight
+        :init
+        (setq bm-restore-repository-on-load t)
         :config
-        (setq bc-bookmark-file (expand-file-name "~/Dropbox/.emacs.persist/.breadcrumbs"))
+        (setq bm-repository-file (expand-file-name "~/Dropbox/.emacs.persist/.bm-repository"))
+        (add-hook 'kill-buffer-hook 'bm-buffer-save)
         (global-set-key (kbd "H-b") 'hydra-bookmarks/body)
         )
     #+END_SRC
@@ -1415,11 +1450,13 @@
       (req-package avy  ;; Avy is a package for jumping to visible text using a char-based decision tree
         :defer 1
         :require (hydra)
-        :delight)
+        :delight
+        :bind ("H-'" . avy-goto-word-1))
 
       (req-package goto-last-change
         :defer 3
-        :delight)
+        :delight
+        :bind ("M-'" . goto-last-change))
 
       (defun occur-dwim ()
         "Call `occur' with a sane default, chosen as the thing under point or selected region"
@@ -1536,7 +1573,7 @@
 
 *** Enable CUA mode (=C-RET= for working with rectangles)
 
-    #+BEGIN_SRC emacs-lisp :tangle yes
+    # +BEGIN_SRC emacs-lisp :tangle yes
       (cua-mode)
       (setq cua-enable-cua-keys nil
             cua-remap-control-v nil
@@ -1557,13 +1594,13 @@
       (define-key global-map (kbd "<S-down-mouse-1>") 'ignore) ; turn off font dialog
       (define-key global-map (kbd "<S-mouse-1>") 'mouse-set-point)
       (put 'mouse-set-point 'CUA 'move)
-    #+END_SRC
+    # +END_SRC
 
     Note: Transient-mark-mode needs to be reenabled after enabling CUA-mode
 
-    #+BEGIN_SRC emacs-lisp :tangle yes
+    # +BEGIN_SRC emacs-lisp :tangle yes
       (setq transient-mark-mode t)
-    #+END_SRC
+    # +END_SRC
 
 *** Auto-pair braces
 
@@ -1640,76 +1677,6 @@
       (req-package tramp
         :defer 2
         :config (setq tramp-default-method "ssh"))
-    #+END_SRC
-
-*** Expand region
-
-    #+BEGIN_SRC emacs-lisp :tangle yes
-      (defhydra hydra-expand-region (:hint nil :timeout 2.0)
-        "
-       ^Expand Region^
-      ---^-^-------------^-^-----------------^-^--------------
-        [_e_] expand    [_E_] mark email    [_a_] html attr
-        [_c_] contract  [_C_] mark comment  [_i_] innter tag
-        [_q_] quit      [_u_] mark url      [_o_] outer tag
-      "
-        ("e" er/expand-region :exit nil)
-        ("c" er/contract-region :exit nil)
-        ("E" er/mark-email :exit t)
-        ("C" er/mark-comment :exit t)
-        ("u" er/mark-url :exit t)
-        ("a" er/mark-html-attribute :exit t)
-        ("i" er/mark-inner-tag :exit t)
-        ("o" er/mark-outer-tag :exit t)
-        ("q" nil :exit t)
-        )
-
-      (defun my/expand-region-init ()
-        "Expand region then show menu for more options."
-        (interactive)
-        (er/expand-region 1)
-        (hydra-expand-region/body))
-
-      (req-package expand-region
-        :defer 1
-        :require (hydra)
-        :delight
-        :config
-        (global-set-key (kbd "H-e") 'my/expand-region-init)
-        )
-    #+END_SRC
-
-*** Multiple Cursors
-    #+BEGIN_SRC emacs-lisp :tangle yes
-      (defhydra multiple-cursors-hydra (:hint nil)
-        "
-           ^Up^            ^Down^        ^Other^
-      ------------------------------------------------
-      [_p_]   Next    [_n_]   Next    [_l_] Edit lines
-      [_P_]   Skip    [_N_]   Skip    [_a_] Mark all
-      [_M-p_] Unmark  [_M-n_] Unmark  [_r_] Mark by regexp
-      ^ ^             ^ ^             [_k_] Kill (exit)
-      ^ ^             ^ ^             [_q_] Quit menu
-      "
-        ("l" mc/edit-lines)
-        ("a" mc/mark-all-like-this)
-        ("n" mc/mark-next-like-this)
-        ("N" mc/skip-to-next-like-this)
-        ("M-n" mc/unmark-next-like-this)
-        ("p" mc/mark-previous-like-this)
-        ("P" mc/skip-to-previous-like-this)
-        ("M-p" mc/unmark-previous-like-this)
-        ("r" mc/mark-all-in-region-regexp)
-        ("k" mc/keyboard-quit)
-        ("q" nil)
-        ("<mouse-1>" mc/add-cursor-on-click)
-        ("<down-mouse-1>" ignore)
-        ("<drag-mouse-1>" ignore)
-        )
-
-      (req-package multiple-cursors
-        :defer 2
-        :config (define-key mc/keymap (kbd "<return>") nil))
     #+END_SRC
 
 *** Transpose
@@ -1790,6 +1757,118 @@
                ))
     #+END_SRC
 
+** Regions
+*** Rectangles
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defhydra hydra-rectangle-ops (:hint nil :timeout 2.0)
+        "
+       ^Rectangles^
+      ---^-^----------------------------------^-^------------------------------------
+        [_x_] exchange point/mark            [_o_] 'open' a rectangle (with spaces)
+        [_k_] kill rectangle (w/ yank)       [_n_] insert line numbers (on left)
+        [_w_] copy rectangle                 [_t_] tidy whitespace (from left)
+        [_c_] clear rectangle (with spaces)  [_r_] replace rectangle with string
+        [_d_] delete rectangle               [_i_] insert string on each line
+        [_y_] paste (yank) last rectangle
+      ---^-^----------------------------------^-^------------------------------------
+      "
+        ("x" exchange-point-and-mark)
+        ("k" kill-rectangle)
+        ("c" copy-rectangle-as-kill)
+        ("w" clear-rectangle)
+        ("d" delete-rectangle)
+        ("y" yank-rectangle)
+        ("o" open-rectangle)
+        ("n" rectangle-number-lines)
+        ("t" delete-whitespace-rectangle)
+        ("r" string-rectangle)
+        ("i" string-insert-rectangle)
+        ("q" nil)
+        )
+      (global-set-key (kbd "H-r") 'hydra-rectangle-ops/body)
+    #+END_SRC
+
+*** Expand region
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defhydra hydra-expand-region (:hint nil :timeout 2.0)
+        "
+       ^Expand Region^
+      ---^-^-------------^-^-----------------^-^--------------
+        [_e_] expand    [_E_] mark email    [_a_] html attr
+        [_c_] contract  [_C_] mark comment  [_i_] innter tag
+        [_q_] quit      [_u_] mark url      [_o_] outer tag
+      "
+        ("e" er/expand-region :exit nil)
+        ("c" er/contract-region :exit nil)
+        ("E" er/mark-email :exit t)
+        ("C" er/mark-comment :exit t)
+        ("u" er/mark-url :exit t)
+        ("a" er/mark-html-attribute :exit t)
+        ("i" er/mark-inner-tag :exit t)
+        ("o" er/mark-outer-tag :exit t)
+        ("q" nil :exit t)
+        )
+
+      (defun my/expand-region-init ()
+        "Expand region then show menu for more options."
+        (interactive)
+        (er/expand-region 1)
+        (hydra-expand-region/body))
+
+      (req-package expand-region
+        :defer 1
+        :require (hydra)
+        :delight
+        :config
+        (global-set-key (kbd "H-e") 'my/expand-region-init)
+        )
+    #+END_SRC
+
+*** Multiple Cursors
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defhydra multiple-cursors-hydra (:hint nil)
+        "
+      ^Up^            ^Down^          ^Other^
+      ------------------------------------------------
+      [_p_]   Next    [_n_]   Next    [_l_] Edit lines
+      [_P_]   Skip    [_N_]   Skip    [_a_] Mark all
+      [_M-p_] Unmark  [_M-n_] Unmark  [_r_] Mark by regexp
+      ^ ^             ^ ^             [_k_] Kill (exit)
+      ------------------------------------------------
+      "
+        ("l" mc/edit-lines)
+        ("a" mc/mark-all-like-this)
+        ("n" mc/mark-next-like-this)
+        ("N" mc/skip-to-next-like-this)
+        ("M-n" mc/unmark-next-like-this)
+        ("p" mc/mark-previous-like-this)
+        ("P" mc/skip-to-previous-like-this)
+        ("M-p" mc/unmark-previous-like-this)
+        ("r" mc/mark-all-in-region-regexp)
+        ("k" mc/keyboard-quit)
+        ("q" nil)
+        ("<mouse-1>" mc/add-cursor-on-click)
+        ("<down-mouse-1>" ignore)
+        ("<drag-mouse-1>" ignore)
+        )
+
+      (req-package multiple-cursors
+        :defer 2
+        :bind* ("H-." . multiple-cursors-hydra/body)
+        :config (define-key mc/keymap (kbd "<return>") nil))
+    #+END_SRC
+
+*** Smart region selection
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (req-package smart-region
+        :defer 2
+        :require (multiple-cursors)
+        :delight
+        :config
+        (smart-region-on)
+        )
+    #+END_SRC
 ** Search/replace
 *** "Find" hydra
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1847,8 +1926,10 @@
         :require (visual-regexp)
         :bind (("C-c r" . vr/replace)
                ("C-c q" . vr/query-replace)
-               ("C-r" . vr/isearch-backward)
-               ("C-s" . vr/isearch-forward)))
+               ("C-r" . isearch-backward-regexp)
+               ("C-s" . isearch-forward-regexp)
+               ("C-M-r" . vr/isearch-backward)
+               ("C-M-s" . vr/isearch-forward)))
     #+END_SRC
 
 *** Improve occur with line-numbers and filtering
@@ -1961,6 +2042,25 @@
        (add-hook 'sass-mode-hook
                  '(lambda () (set (make-local-variable 'yas-indent-line) 'fixed)))
      #+END_SRC
+**** URL encode/decode functions
+     #+BEGIN_SRC emacs-lisp :tangle yes
+       (defun func-region (start end func)
+         "run a function over the region between START and END in current buffer."
+         (save-excursion
+           (let ((text (delete-and-extract-region start end)))
+             (insert (funcall func text)))))
+
+       (defun url-encode (start end)
+         "urlencode the region between START and END in current buffer."
+         (interactive "r")
+         (func-region start end #'url-hexify-string))
+
+       (defun url-decode (start end)
+         "de-urlencode the region between START and END in current buffer."
+         (interactive "r")
+         (func-region start end #'url-unhex-string))
+     #+END_SRC
+
 *** Company Mode
 **** Add fuzzy matching to Company
      Disabled for now as it causes emacs to hang
@@ -1990,7 +2090,7 @@
 
     #+BEGIN_SRC emacs-lisp :tangle yes
       (req-package flycheck
-        :require (dash s f exec-path-from-shell flycheck-color-mode-line)
+        :require (dash s f flycheck-color-mode-line)
         :ensure flycheck
         :config (add-hook 'after-init-hook 'global-flycheck-mode)
         :defer 1
@@ -2089,10 +2189,6 @@
        (add-hook 'elixir-mode-hook 'elixir-mode-prettify-symbols-hook)
        (add-hook 'elixir-mode-hook
                  (lambda ()
-                   (setq alchemist-mix-command ". ~/.zshrc && mix"
-                         alchemist-execute-command ". ~/.zshrc && elixir"
-                         alchemist-iex-program-name ". ~/.zshrc && iex"
-                         alchemist-compile-command ". ~/.zshrc && elixirc")
                    (set (make-variable-buffer-local 'ruby-end-expand-keywords-before-re)
                         "\\(?:^\\|\\s-+\\)\\(?:do\\)")
                    (set (make-variable-buffer-local 'ruby-end-check-statement-modifiers)
