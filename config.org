@@ -1,0 +1,1256 @@
+#+TITLE: Emacs Configuration
+#+AUTHOR: Phillip B Oldham
+
+* Introduction
+
+  This file is a literate programming document written with org-mode
+  and org-mode-babel which contains the configuration I use for
+  development.
+
+* TODOs
+** =which-key= integration for =ace-window=
+   I really want to see a =which-key= menu for the
+   extra commands available for =ace-window= as I constantly
+   forget them.
+
+   Unfortunately =ace-window= doesn't have it's own keymap, and
+   I don't want to create a =hydra= for this.
+
+   Current approach would be to create a custom sparse-keymap,
+   iterate through =aw-dispatch-alist= and populate the new
+   keymap from it, then add some advice to one of the =which-key=
+   functions to trigger =which-key-show-minor-mode-keymap=.
+
+   After a time-boxed attempt I have the following, but it isn't
+   working yet.
+   #+BEGIN_SRC emacs-lisp :tangle no
+    (use-package ace-window
+      :delight
+      :bind ("M-o" . ace-window)
+      :config
+        (ace-window-display-mode t)
+        (setq aw-dispatch-always t)
+        (progn
+          (setq ace-window-map (make-sparse-keymap))
+          (cl-loop for (key . value) in aw-dispatch-alist
+                   do (define-key ace-window-map key
+                       (if (car-safe value)
+                         (quote (car-safe value))
+                           (quote value))))))
+   #+END_SRC
+** =ace-mc= should use home-row keys like =avy=
+** Investigate using =ycmd= for code completion
+   https://github.com/abingham/emacs-ycmd#company-ycmd
+* Contents
+** Basic settings
+*** UTF-8 everywhere
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (set-charset-priority 'unicode)
+      (setq locale-coding-system   'utf-8)   ; pretty
+      (set-terminal-coding-system  'utf-8)   ; pretty
+      (set-keyboard-coding-system  'utf-8)   ; pretty
+      (set-selection-coding-system 'utf-8)   ; please
+      (prefer-coding-system        'utf-8)   ; with sugar on top
+      (setq default-process-coding-system '(utf-8-unix . utf-8-unix))
+    #+END_SRC
+*** Environment
+**** Flag that emacs is active (for use with tmux)
+     #+BEGIN_SRC emacs-lisp :tangle yes
+       (setenv "INSIDE_EMACS" "1")
+     #+END_SRC
+**** Pick up =PATH= from =zsh=
+     #+BEGIN_SRC emacs-lisp :tangle yes
+       (defun my/configure-path ()
+         (let ((path (shell-command-to-string ". ~/.zshrc; echo -n $PATH")))
+           (setenv "PATH" path)
+           (setq exec-path
+                 (append
+                  (split-string-and-unquote path ":")
+                  exec-path))))
+
+       (add-hook 'after-init-hook 'my/configure-path)
+     #+END_SRC
+**** Enable direnv
+     =direnv= is a great tool for managing local environment during
+     development. This package integrates =direnv= with Emacs so that
+     programs started from within emacs, such as inferior shells,
+     linters, compilers, and test runners, will be looked up in the
+     correct =$PATH=, and will be started with the correct environment
+     variables set.
+     #+BEGIN_SRC emacs-lisp :tangle yes
+       (use-package direnv
+         :delight
+         :config
+         (direnv-mode))
+     #+END_SRC
+**** =exec-path-from-shell=
+     #+BEGIN_SRC emacs-lisp :tangle yes
+       (use-package exec-path-from-shell
+         :delight
+         :config (when (memq window-system '(mac ns x))
+           (exec-path-from-shell-initialize)))
+     #+END_SRC
+**** Ensure system packages deps are available
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package use-package-ensure-system-package)
+     #+END_SRC
+** Startup
+*** Reduce GC on startup
+    Emacs will run garbage collection after `gc-cons-threshold' bytes of
+    consing. The default value is 800,000 bytes, or ~ 0.7 MiB. By
+    increasing to maximum we reduce the number of pauses due to
+    garbage collection during setup.
+
+    At the end of this file this value returned to the default, once
+    startup has completed.
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq gc-cons-threshold most-positive-fixnum)
+    #+END_SRC
+*** Add timestamps to messages
+    Adding timestamps to the messages so we can see whether anything
+    is causing emacs to block for a significant amount of time.
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    ;;; timestamps in *Messages*
+    (defun current-time-microseconds ()
+      (let* ((nowtime (current-time))
+             (now-ms (nth 2 nowtime)))
+        (concat (format-time-string "[%Y-%m-%dT%T" nowtime) (format ".%d] " now-ms))))
+
+    (defadvice message (before test-symbol activate)
+      (if (not (string-equal (ad-get-arg 0) "%s%s"))
+          (let ((deactivate-mark nil)
+                (inhibit-read-only t))
+            (with-current-buffer "*Messages*"
+              (goto-char (point-max))
+              (if (not (bolp))
+                  (newline))
+              (insert (current-time-microseconds))))))
+    #+END_SRC
+
+*** Disable the cursor blink
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (blink-cursor-mode -1)
+    #+END_SRC
+*** Disable compiler warnings
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq byte-compile-warnings nil)
+    #+END_SRC
+*** Hide the toolbar
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (when (fboundp 'tool-bar-mode)
+      (tool-bar-mode -1))
+    #+END_SRC
+*** Hide scrollbars
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (when (fboundp 'scroll-bar-mode)
+      (scroll-bar-mode -1))
+    #+END_SRC
+*** Disable visual bell
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq visible-bell nil)
+    #+END_SRC
+*** Disable instructions in the scratch buffer
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq initial-scratch-message nil)
+    #+END_SRC
+*** Allow answering 'Yes or No' prompts with Y or N
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (fset 'yes-or-no-p 'y-or-n-p)
+    #+END_SRC
+*** Reduce the message log to the last 512 entries
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq message-log-max 512)
+    #+END_SRC
+*** Confirm exiting emacs
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq confirm-kill-emacs 'y-or-n-p)
+    #+END_SRC
+*** Enable better interop with OS clipboard
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq save-interprogram-paste-before-kill t)
+    #+END_SRC
+*** Enforce newline at end of files
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq require-final-newline t)
+    #+END_SRC
+*** Hide cursor in non-focussed windows
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq cursor-in-non-selected-windows nil)
+    #+END_SRC
+*** Persist highlight in non-focussed windows
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq highlight-nonselected-windows t)
+    #+END_SRC
+*** Disable using tabs as indents
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq-default indent-tabs-mode nil)
+    #+END_SRC
+*** Enable use of the clipboard
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq select-enable-clipboard t)
+    #+END_SRC
+*** Allow overwriting selected text
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (delete-selection-mode 1)
+    #+END_SRC
+*** Always focus the =*Help*= buffer when it opens
+    I prefer the =*Help*= buffer to gain focus when it opens
+    so I can hit =q= to close it and go back to where I was.
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq help-window-select t)
+    #+END_SRC
+** Interface
+*** Theme
+    My personal theme: https://github.com/OldhamMade/leiptr-them
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package leiptr-theme
+      :straight (leiptr :type git :host github :repo "OldhamMade/leiptr-theme"))
+    #+END_SRC
+*** Font: SanFranciscoMono
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (set-face-attribute 'default nil :font "SFMono Nerd Font:pixelsize=10:weight=normal:slant=normal:width=normal:spacing=100:scalable=true:hinting=true")
+    #+END_SRC
+*** Show a visual bell
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package mode-line-bell
+      :config
+        (setq mode-line-bell-flash-time 0.4)
+        (mode-line-bell-mode))
+    #+END_SRC
+**** Show a bell when using the cursors too much
+     I'd like to use more "jump" commands, but I rely on
+     arrow keys too much. This should hopefully remove that
+     reliance.
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package annoying-arrows-mode
+       :config
+         (global-annoying-arrows-mode))
+     #+END_SRC
+*** Install =popup= for packages that require it
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package popup)
+    #+END_SRC
+*** Better help
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package helpful
+      :bind (("C-h f" . helpful-callable)
+             ("C-h v" . helpful-variable)
+             ("C-h k" . helpful-key)))
+    #+END_SRC
+** Modeline
+*** Ensure buffer names are unique
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defun my/load-uniquify ()
+        (require 'uniquify)
+        (setq uniquify-buffer-name-style 'forward))
+
+      (add-hook 'after-init-hook 'my/load-uniquify)
+    #+END_SRC
+*** Display total lines in file
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defvar my-mode-line-buffer-line-count nil)
+      (make-variable-buffer-local 'my-mode-line-buffer-line-count)
+
+      (setq-default mode-line-format
+                    '("  " mode-line-modified
+                      (list 'line-number-mode "  ")
+                      (:eval (when line-number-mode
+                               (let ((str "L%l"))
+                                 (when (and (not (buffer-modified-p)) my-mode-line-buffer-line-count)
+                                   (setq str (concat str "/" my-mode-line-buffer-line-count)))
+                                 str)))
+                      "  %p"
+                      (list 'column-number-mode "  C%c")
+                      "  " mode-line-buffer-identification
+                      "  " mode-line-modes))
+
+      (defun my-mode-line-count-lines ()
+        (setq my-mode-line-buffer-line-count (int-to-string (count-lines (point-min) (point-max)))))
+
+      (add-hook 'find-file-hook 'my-mode-line-count-lines)
+      (add-hook 'after-save-hook 'my-mode-line-count-lines)
+      (add-hook 'after-revert-hook 'my-mode-line-count-lines)
+      (add-hook 'dired-after-readin-hook 'my-mode-line-count-lines)
+    #+END_SRC
+*** Add =delight= to clean-up the modeline
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package delight)
+    #+END_SRC
+
+** Minibuffer
+*** Disable ability to overwrite minibuffer prompt
+    This stops the cursor entering the prompt text in the minibuffer
+    when using shortcuts such as CTRL-A.
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (setq minibuffer-prompt-properties
+            '(read-only t point-entered minibuffer-avoid-prompt face minibuffer-prompt))
+    #+END_SRC
+*** Enable recursive editing
+
+    We can make the minibuffer much more useful by enabling recursive
+    usage. This means that when the minibuffer is active we can still call
+    commands that require the minibuffer.
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (setq enable-recursive-minibuffers t)
+    #+END_SRC
+
+    With this setting enabled, it's easy to lose track of whether we're
+    in a recursive minibuffer or not. We display the recursion level in
+    the minibuffer to avoid confusion.
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (minibuffer-depth-indicate-mode 1)
+    #+END_SRC
+
+*** Minibuffer "shortcuts"
+
+    When selecting a file to visit, // in the path will mean /
+    (root) and ~ will mean $HOME regardless of preceding text
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (setq file-name-shadow-tty-properties '(invisible t))
+    #+END_SRC
+
+    Dim the part of the path that will be replaced.
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (file-name-shadow-mode 1)
+    #+END_SRC
+
+*** Performance tweaks
+
+    Make sure any minibuffer operations don't trigger the gc, so tools
+    like flx won't pause.
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defun my/minibuffer-setup-hook ()
+        (setq gc-cons-threshold most-positive-fixnum))
+
+      (defun my/minibuffer-exit-hook ()
+        (setq gc-cons-threshold 800000))
+
+      (add-hook 'minibuffer-setup-hook #'my/minibuffer-setup-hook)
+      (add-hook 'minibuffer-exit-hook #'my/minibuffer-exit-hook)
+    #+END_SRC
+
+** Key bindings
+*** macOS modifier keys
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq mac-command-modifier 'alt
+          mac-option-modifier 'meta
+          mac-command-modifier 'hyper
+          mac-right-option-modifier nil)
+    #+END_SRC
+*** macOS standard keybindings
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (bind-keys*
+       ("H-z" . undo)
+       ("H-Z" . redo)
+       ;; moving around
+       ("<next>" . (lambda () (interactive)
+                     (condition-case nil (scroll-up)
+                       (end-of-buffer (goto-char (point-max))))))
+       ("<prior>" . (lambda () (interactive)
+                      (condition-case nil (scroll-down)
+                        (beginning-of-buffer (goto-char (point-min))))))
+       ;; Select all
+       ("H-a" . mark-whole-buffer)
+       ;; cut
+       ("H-x" . kill-region)
+       ;; copy
+       ("H-c" . kill-ring-save)
+       ;; paste
+       ("H-v" . yank)
+       ;; open
+       ("H-o" . find-file)
+       ;; save
+       ("H-s" . save-buffer)
+       ;;  close
+       ("H-w" . (lambda ()
+                  (interactive)
+                  (my-kill-buffer
+                   (current-buffer))))
+       ;; quit
+       ("H-q" . save-buffers-kill-emacs)
+       ;; minimise
+       ("H-m" . iconify-frame)
+       ;; hide
+       ("H-h" . ns-do-hide-emacs)
+       ;; jump to beginning of line
+       ("H-<left>" . beginning-of-line)
+       ;; jump to end of line
+       ("H-<right>" . end-of-line)
+       )
+    #+END_SRC
+*** Tools for finding free keys
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package free-keys)
+    #+END_SRC
+*** ~=tmux=-style keybindings~
+
+    Emulate the frame rotation of tmux, and my tmux settings for splitting windows,
+    so I don't get frustrated by muscle-memory.
+
+    #+BEGIN_SRC emacs-lisp :tangle no
+    (use-package rotate
+      :init (global-unset-key "\C-b")
+      :bind (("C-b SPC" . rotate-layout)
+             ("C-b -" . split-window-below)
+             ("C-b |" . split-window-right)
+             ("C-b r" . rotate-windows)))
+    #+END_SRC
+
+** Highlighting
+*** Highlight syntax by default
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (global-font-lock-mode 1)
+    #+END_SRC
+
+*** Highlight indentation
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package highlight-indentation
+      :delight
+      :config
+        (set-face-background 'highlight-indentation-face "#222")
+        (add-hook 'org-mode-hook 'highlight-indentation-mode)
+        (add-hook 'prog-mode-hook 'highlight-indentation-mode)
+        (add-hook 'yaml-mode-hook 'highlight-indentation-mode))
+    #+END_SRC
+
+*** Highlight delimiters
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package rainbow-delimiters
+      :delight
+      :config
+        (add-hook 'prog-mode-hook 'rainbow-delimiters-mode)
+        (add-hook 'sass-mode-hook 'rainbow-delimiters-mode))
+    #+END_SRC
+
+*** Highlight variables
+    Rainbow identifiers subtly changes the look of variables, to make them a little
+    easier to visually search
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (use-package rainbow-identifiers
+        :config
+          (add-hook 'prog-mode-hook (lambda ()
+                                      (unless (eq major-mode 'js2-mode)
+                                        (rainbow-identifiers-mode)))))
+    #+END_SRC
+*** Highlight trailing whitespace
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq-default show-trailing-whitespace t)
+    #+END_SRC
+**** Disable for certain modes & minibuffer
+     Certain modes, like =shell-mode=, and the minibuffer tend to
+     leave trailing space that is annoying to see.
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (dolist (hook '(special-mode-hook
+                     term-mode-hook
+                     comint-mode-hook
+                     compilation-mode-hook
+                     minibuffer-setup-hook))
+       (add-hook hook
+         (lambda () (setq show-trailing-whitespace nil))))
+     #+END_SRC
+*** Highlight lines that go over 80 chars
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defun my/load-whitespace ()
+        (require 'whitespace)
+        (setq whitespace-line-column 80) ;; limit line length
+        (setq whitespace-style '(face lines-tail))
+        (global-whitespace-mode +1))
+
+      (add-hook 'after-init-hook 'my/load-whitespace)
+    #+END_SRC
+*** Highlight colour references, displaying the colour referenced
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (use-package rainbow-mode
+        :config
+        (progn
+          (add-hook 'sass-mode-hook 'rainbow-mode)
+          (add-hook 'css-mode-hook 'rainbow-mode)
+          (add-hook 'emacs-lisp-mode-hook 'rainbow-mode)
+          ))
+    #+END_SRC
+*** Highlight changes to the buffer caused by commands such as ‘undo’, ‘yank’/’yank-pop’, etc.
+    #+BEGIN_SRC emacs-lisp :tangle no
+      (use-package volatile-highlights
+        :delight
+        :config (volatile-highlights-mode t))
+    #+END_SRC
+** Navigation
+*** =which-key=
+    =which-key= is a minor mode for Emacs that displays the key bindings
+    following your currently entered incomplete command (a prefix) in
+    a popup. For example, after enabling the minor mode if you enter
+    =C-x= and wait for the default of 1 second the minibuffer will
+    expand with all of the available key bindings that follow =C-x= (or
+    as many as space allows given your settings).
+
+    I'm using =which-key= to try and remove my reliance on custom
+    Hydras with =H-<key>= bindings.
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package which-key
+      :config
+      (setq which-key-idle-delay .4
+            which-key-side-window-location 'bottom
+            which-key-side-window-max-height 0.25)
+      (which-key-mode 1))
+    #+END_SRC
+*** =amx=
+    =amx= is an alternative interface for M-x in Emacs. It provides
+    several enhancements over the ordinary execute-extended-command,
+    such as prioritizing your most-used commands in the completion
+    list and showing keyboard shortcuts, and it supports several
+    completion systems for selecting commands, such as ido and ivy.
+
+    I'm trialing =amx= as an alternative to =smex=.
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package amx)
+    #+END_SRC
+*** =flx=
+    Whenever I do searches I prefer the fuzzy-matching style,
+    similar to =fzf= on the commandline. =flx= provides similar
+    functionality in emacs.
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package flx)
+    #+END_SRC
+*** Ivy/Counsel/Swiper
+    =ivy= is a generic completion mechanism for Emacs. While it operates
+    similarly to other completion schemes such as icomplete-mode, Ivy
+    aims to be more efficient, smaller, simpler, and smoother to use
+    yet highly customizable.
+
+    Counsel takes this further, providing versions of common Emacs
+    commands that are customised to make the best use of ivy.
+
+    And Swiper is an alternative to isearch that uses ivy to show an
+    overview of all matches.
+
+    I'm trialing Ivy/Counsel/Swiper as a replacement for
+    =ido= + =smex= and =isearch=.
+
+**** =ivy=
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package ivy
+       :delight
+       :init
+         (ivy-mode 1)
+       :bind
+         (("C-x C-b" . ivy-switch-buffer)
+          ("C-c i r" . ivy-resume))
+       :config
+         (setq ivy-use-virtual-buffers t
+               enable-recursive-minibuffers t
+               ivy-height 10
+               ivy-wrap t
+	       ivy-extra-directories nil
+               ;; disable ^ prefix
+               ivy-initial-inputs-alist nil
+               ;; enable fuzzy matches eveywhere
+	       ivy-re-builders-alist
+	         '((swiper . ivy--regex-plus) ;; disable fuzzy for swiper
+                   (t . ivy--regex-fuzzy))
+	       ivy-count-format "(%d/%d) ")
+         ;; Use C-j for immediate termination with the current value, and RET
+         ;; for continuing completion for that directory. This is the ido
+         ;; behaviour.
+         ;; TODO: Remove me, to get used to proper ivy usage
+         (define-key ivy-minibuffer-map (kbd "C-j") #'ivy-immediate-done)
+         (define-key ivy-minibuffer-map (kbd "RET") #'ivy-alt-done))
+     #+END_SRC
+**** =counsel=
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package counsel
+       :delight
+       :ensure-system-package
+         ((fzf . fzf)
+          (fd . fd)
+          (ag . ag)
+          (rg . ripgrep))
+       :after (ivy)
+       :bind
+         ((:map counsel-describe-map ("M-." . counsel-find-symbol))
+          ("C-x C-f" . counsel-find-file)
+          ("C-M-f" . counsel-rg)
+          ("C-M-r" . counsel-recentf)
+          ("C-x m" . counsel-mark-ring))
+       :init
+         (require 'amx)
+         (counsel-mode)
+       :config
+         (setq counsel-find-file-ignore-regexp (regexp-opt '("./" "..")))
+         (setq counsel-fzf-cmd "fd -H | fzf -f \"%s\"")
+         (add-to-list 'ivy-re-builders-alist '(counsel-ag-function . ivy--regex))
+         (add-to-list 'ivy-re-builders-alist '(counsel-fzf-function . ivy--regex))
+         (add-to-list 'ivy-sort-functions-alist '(counsel-fzf-function . nil)))
+     #+END_SRC
+**** =swiper=
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package swiper
+       :delight)
+       ;:bind ("\C-s" . swiper))
+     #+END_SRC
+**** =ivy-rich=
+     =ivy-rich= is a more friendly interface for ivy, providing inline help
+     and other "rich" data.
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package ivy-rich
+       :after (ivy counsel)
+       :config
+       (ivy-rich-mode 1))
+     #+END_SRC
+*** Projectile
+
+    Automagically interact with "projects"; git, mercurial, bazaar, and darcs repos
+    are seen as projects by default.
+
+**** =projectile=
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package projectile
+       :delight
+       :custom
+       (projectile-enable-caching t)
+       :config
+       (projectile-mode +1)
+       (defun get-projectile-root ()
+         "Return path `matcha-projectile' can print in heading."
+         (if (projectile-project-p)
+             (file-name-nondirectory
+              (directory-file-name
+               (file-name-directory (projectile-project-root))))
+           "Not in Project")))
+     #+END_SRC
+**** Integrate =projectile= with =counsel=
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package counsel-projectile
+       :delight
+       :after
+         (counsel projectile)
+       :init
+         (setq projectile-switch-project-action 'counsel-fzf)
+       :config
+         (define-key projectile-mode-map (kbd "C-c p") 'projectile-command-map)
+         (counsel-projectile-mode))
+     #+END_SRC
+
+** Buffers
+*** Initial buffer major mode: text
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq initial-major-mode 'text-mode)
+    #+END_SRC
+
+*** New Empty Buffer
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (defun new-empty-buffer ()
+      "Create a new buffer called untitled(<n>)"
+      (interactive)
+      (let ((newbuf (generate-new-buffer-name "untitled")))
+        (switch-to-buffer newbuf)))
+
+    (bind-key* "H-n" 'new-empty-buffer)
+    #+END_SRC
+
+*** Make the =*scratch*= buffer persistent across sessions
+    #+BEGIN_SRC  emacs-lisp :tangle yes
+    (use-package persistent-scratch
+      :config
+      (setq persistent-scratch-save-file (expand-file-name "~/Dropbox/.emacs.persist/.scratch"))
+      (persistent-scratch-setup-default))
+
+    (defun my/set-scratch-as-text ()
+      (with-current-buffer (get-buffer "*scratch*")
+        (let ((mode "text-mode"))
+          (message "Setting scratch to text-mode")
+          (funcall (intern mode)))))
+
+    (defadvice persistent-scratch-restore (after advice-persistent-scratch-restore activate)
+      (my/set-scratch-as-text))
+
+      ;; yas-reload-all unfortunately triggers `persistent-scratch-setup-default`
+      ;; again, resetting the scratch to fundamental-mode, so advising here too.
+      ;; (defadvice yas-reload-all (after advice-yas-reload-all activate)
+      ;;  (my/set-scratch-as-text))
+    #+END_SRC
+
+*** Bury special buffers instead of killing
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq bury-buffer-names '("*scratch*" "*Messages*" "*dashboard*"))
+
+    (defun kill-buffer-query-functions-maybe-bury ()
+      "Bury certain buffers instead of killing them."
+      (if (member (buffer-name (current-buffer)) bury-buffer-names)
+          (progn
+            (kill-region (point-min) (point-max))
+            (bury-buffer)
+            nil)
+        t))
+
+    (add-hook 'kill-buffer-query-functions 'kill-buffer-query-functions-maybe-bury)
+
+    (defun my-kill-buffer (buffer)
+      "Protect some special buffers from getting killed."
+      (interactive (list (current-buffer)))
+      (if (member (buffer-name buffer) bury-buffer-names)
+          (call-interactively 'bury-buffer buffer)
+        (kill-buffer buffer)))
+    #+END_SRC
+
+*** Kill all buffers except current
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (defun my/kill-all-buffers-except-current ()
+      "Kill all buffers except current buffer."
+      (interactive)
+      (let ((current-buf (current-buffer)))
+        (dolist (buffer (buffer-list))
+          (set-buffer buffer)
+          (unless (eq current-buf buffer)
+            (kill-buffer buffer)))))
+    (global-set-key (kbd "C-x K") 'my/kill-all-buffers-except-current)
+    #+END_SRC
+
+*** Switching buffers
+**** Jump Between Buffers
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package frog-jump-buffer
+      :bind
+        ("C-x b" . frog-jump-buffer)
+      :init
+      (setq frog-jump-buffer-posframe-handler 'posframe-poshandler-frame-center)
+      (setq frog-jump-buffer-posframe-parameters
+        '((internal-border-width . 10)
+          (background-color . "gray10")
+          ))
+      :config
+      (dolist (regexp '("TAGS" "^\\*Compile-log" "-debug\\*$" "^\\:"
+                        "errors\\*$" "^\\*Backtrace" "-ls\\*$"
+                        "\\*straight-process" "stderr\\*$" "^\\*Flymake"
+                        "^\\*vc" "^\\*Warnings"
+                        "^\\*eldoc" "\\^*Shell Command" "\\*direnv"))
+        (push regexp frog-jump-buffer-ignore-buffers)))
+    #+END_SRC
+
+*** Copy buffer path to kill ring
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (defun copy-full-path-to-kill-ring ()
+      "copy buffer's full path to kill ring"
+      (interactive)
+      (when buffer-file-name
+        (kill-new (file-truename buffer-file-name))))
+    #+END_SRC
+
+*** Echo buffer path
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (defun describe-variable-short (var)
+      (interactive "vVariable: ")
+      (message (format "%s: %s" (symbol-name var) (symbol-value var))) )
+
+    (defun get-buffer-path ()
+      "print the buffer path in the mini buffer"
+      (interactive)
+      (when buffer-file-name
+        (kill-new (file-truename buffer-file-name))
+        (message (format "Path: %s (copied to kill-ring)" (file-truename buffer-file-name)))
+        ))
+    #+END_SRC
+
+** Moving around
+*** Enable subword mode
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (global-subword-mode 1)
+    #+END_SRC
+*** Custom Jump menu
+    I like to group some jump commands into a single menu,
+    to make them easy to remember.
+**** Create a custom prefix key
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (define-prefix-command 'my-jump-map)
+     (global-set-key (kbd "C-\\") 'my-jump-map)
+     #+END_SRC
+**** Moving to top/bottom of buffer
+     I have a habit of jumping to the top of the buffer before
+     initiating a search, so I don't have to loop when I know what I
+     need is towards the top of the buffer.
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (define-key my-jump-map "[" 'beginning-of-buffer)
+     (define-key my-jump-map "]" 'end-of-buffer)
+     #+END_SRC
+**** Goto a specific line
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (define-key my-jump-map "g" 'goto-line)
+     #+END_SRC
+**** Cycle through historic points
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (define-key my-jump-map "'" '("previous points" . pop-global-mark))
+     #+END_SRC
+*** DWIM in relation to indentation
+    =C-a= normally moves the cursor to the beginning of the line
+    unconditionally. This version is more useful, as it moves to the
+    first non-whitespace character if we're already at the beginning of
+    the line. Repeated use of `C-a' toggles between these two positions.
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (defun my/beginning-of-line-dwim ()
+      "Toggles between moving point to the first non-whitespace character,
+      and the start of the line."
+      (interactive)
+      (let ((start-position (point)))
+        (move-beginning-of-line nil)
+        (when (= (point) start-position)
+          (back-to-indentation))))
+
+    (bind-keys
+      ("C-a" . my/beginning-of-line-dwim)
+      ("H-<left>" . my/beginning-of-line-dwim))
+    #+END_SRC
+*** Jumping around with =avy= and friends
+**** =avy=
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package avy
+       :delight
+       :bind (:map my-jump-map
+              (("w" . avy-goto-word-1)
+               ("c" . avy-goto-char-timer)
+               ("l" . avy-goto-line)))
+       :config (setq avy-all-windows nil))
+     #+END_SRC
+*** Jump back to the last edit
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package goto-last-change
+      :delight
+      :bind (:map my-jump-map
+             ("-" . goto-last-change)))
+    #+END_SRC
+** Editing
+*** Use [[http://www.dr-qubit.org/emacs.php#undo-tree][=undo-tree]] in place of standard undo/redo
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package undo-tree
+      :delight
+      :config (global-undo-tree-mode))
+    #+END_SRC
+*** Enable automatic indenting
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (electric-indent-mode +1)
+    #+END_SRC
+*** Set tab width to 4 for all buffers
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq-default tab-width 4)
+    #+END_SRC
+
+*** Multiple cursors
+    Allows editing with multiple points on the screen.
+**** Base package
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package multiple-cursors
+       :delight
+       :bind (("M-M ." . mc/mark-all-dwim)
+              ("M-M l" . mc/edit-lines)
+              ("M-M a" . mc/mark-all-like-this)
+              ("M-M n" . mc/mark-next-like-this)
+              ("M-M p" . mc/mark-previous-like-this))
+       :config (define-key mc/keymap (kbd "<return>") nil))
+     #+END_SRC
+**** =ace-mc=
+     =ace-mc= makes it really easy to add and remove multiple cursors
+     using ace jump mode.
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package ace-mc
+       :after (multiple-cursors)
+       :delight
+       :bind ("M-M m" . ace-mc-add-multiple-cursors))
+     #+END_SRC
+*** Smart regions
+    Smart region guesses what you want to select by one command:
+
+    - If you call this command multiple times at the same position, it
+      expands the selected region (with `er/expand-region').
+    - Else, if you move from the mark and call this command, it selects
+      the region rectangular (with `rectangle-mark-mode').
+    - Else, if you move from the mark and call this command at the same
+      column as mark, it adds a cursor to each line (with `mc/edit-lines').
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package smart-region
+      :after (multiple-cursors)
+      :delight
+      :config
+        (smart-region-on))
+    #+END_SRC
+*** Expanding regions
+    I use expand region a lot. =M-[= feels like a good binding, with
+    the mental connection of "open" (expand) and conversely =M-]= as
+    "close" (contract).
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package expand-region
+      :delight
+      :bind (("M-[" . er/expand-region)
+             ("M-]" . er/contract-region)))
+    #+END_SRC
+*** Auto-pair braces
+    Emacs 24.4+ comes with =electric-pair-mode= which matches =autopair=
+    in terms of functionality.
+
+    I disable it in the minibuffer as it usually just gets in the way there.
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (electric-pair-mode t)
+    (add-hook 'minibuffer-setup-hook (lambda () (electric-pair-mode -1)))
+    (add-hook 'minibuffer-exit-hook (lambda () (electric-pair-mode t)))
+    #+END_SRC
+*** Unfill
+    Unfill adds the inverse of fill-paragraph/-region.
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package unfill)
+    #+END_SRC
+*** Move text with =M-<up>= and =M-<down>=
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package move-text
+      :delight "⥮"
+      :config (move-text-default-bindings))
+    #+END_SRC
+*** Crux: A Collection of Ridiculously Useful eXtensions
+    =crux= bundles a few useful interactive commands to enhance your
+    overall Emacs experience.
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package crux
+      :commands
+        (crux-duplicate-current-line-or-region
+         crux-smart-kill-line
+         crux-rename-file-and-buffer
+         crux-kill-other-buffers
+         crux-capitalize-region
+         crux-upcase-region
+         crux-downcase-region)
+      :bind (("M-D" . crux-duplicate-current-line-or-region)
+             ("C-k" . crux-smart-kill-line)
+             ("C-c r" . crux-rename-file-and-buffer)
+             ("C-c k" . crux-kill-other-buffers)
+             ("C-c c" . crux-capitalize-region)
+             ("C-c u" . crux-upcase-region)
+             ("C-c l" . crux-downcase-region)
+             )
+      :config
+        (crux-reopen-as-root-mode))
+    #+END_SRC
+** Spelling
+*** =flyspell-correct-ivy=
+    flyspell-correct is a package for distraction-free words
+    correction with flyspell via a selected interface.
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package flyspell-correct-ivy
+      :delight
+      :bind ("C-M-;" . flyspell-correct-wrapper)
+      :init
+        (setq flyspell-correct-interface #'flyspell-correct-ivy))
+    #+END_SRC
+*** =ace-flyspell=
+    Jump to and correct spelling errors using avy and flyspell.
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package ace-flyspell
+      :config (ace-flyspell-setup))
+    #+END_SRC
+** Search/replace
+*** Add =deadgrep= for searching (faster than =grep=)
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package deadgrep
+      :delight)
+    #+END_SRC
+*** Display 'current match/total matches' in the mode-line in various search modes
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package anzu
+      :delight
+      :config (global-anzu-mode +1))
+    #+END_SRC
+*** Synonym injection
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package synosaurus
+      :ensure-system-package
+        (wn . wordnet)
+      :commands (synosaurus-mode
+                 synosaurus-lookup
+                 synosaurus-choose-and-replace)
+      :bind ("C-c s" . synosaurus-choose-and-replace)
+      :init
+      (setq synosaurus-backend 'synosaurus-backend-wordnet
+            synosaurus-choose-method 'popup))
+    #+END_SRC
+*** =ace-isearch=
+    A minor mode which combines =isearch=, =avy= and =swiper=.
+
+    I have this configured to skip isearch and go from avy to swiper.
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package ace-isearch
+      :delight
+      :init
+        (global-ace-isearch-mode +1)
+      :config
+        (custom-set-variables
+          '(ace-isearch-input-length 2)
+          '(ace-isearch-jump-delay 1)
+          '(ace-isearch-function 'avy-goto-char)
+          '(ace-isearch-use-jump 'printing-char)))
+    #+END_SRC
+** Windows
+*** Use =ace-window= to move around
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package ace-window
+      :delight
+      :bind ("M-o" . ace-window)
+      :config
+        (ace-window-display-mode t)
+        (setq aw-dispatch-always t))
+    #+END_SRC
+**** Show available commands
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (defadvice ace-window (before other-window-now activate)
+       (which-key-show-keymap )
+       (when buffer-file-name (save-buffer)))
+     #+END_SRC
+*** Allow "zooming" a buffer to full-screen
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package zoom-window
+      :init (custom-set-variables
+             '(zoom-window-mode-line-color "DarkGreen"))
+      :bind ("C-x C-z" . zoom-window-zoom))
+    #+END_SRC
+*** Perspectives (workspaces)
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package perspective
+      :config (persp-mode))
+
+    (use-package persp-projectile
+      :config
+      (define-key projectile-mode-map (kbd "s-s") 'projectile-persp-switch-project))
+    #+END_SRC
+
+*** Recover window split using =C-c <left>= with winner-mode
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (defun my/load-winner-mode ()
+      (winner-mode 1))
+    (add-hook 'after-init-hook 'my/load-winner-mode)
+    #+END_SRC
+** Version Control
+*** Highlight diff in fringe
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package diff-hl
+      :bind (:map my-jump-map
+             (("n" . diff-hl-next-hunk)
+              ("p" . diff-hl-previous-hunk)))
+      :config
+      (global-diff-hl-mode 1))
+    #+END_SRC
+
+*** Use =magit= and =forge= with git repositories
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package magit-todos
+      :after (projectile magit))
+
+    (use-package magit-gitflow
+      :after (projectile magit))
+
+    (use-package magit-diff-flycheck
+      :after (projectile magit))
+
+    (use-package magit
+      :after projectile
+      :commands (magit-status
+                 magit-log
+                 magit-commit
+                 magit-stage-file)
+      :hook ((magit-mode . turn-on-magit-gitflow)
+             (magit-diff-visit-file . (lambda ()
+                                        (when smerge-mode
+                                          (my/smerge-hydra/body)))))
+      :config
+      (setq magit-branch-arguments nil
+            magit-branch-read-upstream-first 'fallback
+            magit-diff-paint-whitespace t
+            magit-diff-highlight-indentation (quote (("" . tabs)))
+            magit-fetch-arguments (quote ("--prune"))
+            magit-pull-arguments (quote ("--rebase"))
+            magit-push-arguments (quote ("--set-upstream"))
+            magit-log-arguments (quote ("--graph" "--color" "--decorate" "-n256")))
+      (magit-todos-mode t)
+      (transient-append-suffix 'magit-pull "C"
+        '("A" "Autostash" "--autostash"))
+      )
+
+    (defun magit-set-repo-dirs-from-projectile ()
+      "Set `magit-repository-directories' with known Projectile projects."
+      (setq magit-repository-directories
+            (mapcar (lambda (dir)
+                      (cons dir 0))
+                    (seq-filter (lambda (dir)
+                                  (file-exists-p (expand-file-name ".git" dir)))
+                                projectile-known-projects))))
+
+    (with-eval-after-load 'projectile
+      (magit-set-repo-dirs-from-projectile))
+
+    (add-hook 'projectile-switch-project-hook
+              #'magit-set-repo-dirs-from-projectile)
+    (setq smerge-command-prefix "\C-c m")
+    #+END_SRC
+
+** Org-mode
+*** Tweaks
+    These are tweaks to the built-in org-mode
+**** Enable shift-selection
+     Standard Emacs =S-<cursor>= commands conflict with Org’s use of
+     =S-<cursor>= to change timestamps, TODO keywords, priorities, and
+     item bullet types, etc. Since =S-<cursor>= commands outside of
+     specific contexts do not do anything, Org offers the variable
+     =org-support-shift-select= for customization. Org mode accommodates
+     shift selection by:
+
+       1. making it available outside of the special contexts where special
+          commands apply, and
+       2. extending an existing active region even if point moves across a
+          special context.
+
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (setq org-support-shift-select t)
+     #+END_SRC
+**** Add font styles to =DONE= lines
+     It's useful to have titles like =TODO= and =DONE= hilight differently.
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (setq org-fontify-done-headline t)
+     #+END_SRC
+**** =SRC= blocks
+***** Style src blocks natively
+      #+BEGIN_SRC emacs-lisp :tangle yes
+      (setq org-src-fontify-natively t)
+      #+END_SRC
+***** Allow indenting natively within source blocks.
+      #+BEGIN_SRC emacs-lisp :tangle yes
+      (setq org-src-tab-acts-natively nil)
+      #+END_SRC
+**** Additional templates
+     Org-mode has "Easy Templates", here are some additions:
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (add-to-list 'org-structure-template-alist
+             '("S" "#+BEGIN_SRC emacs-lisp :tangle yes\n?\n#+END_SRC"))
+     #+END_SRC
+*** Packages
+**** Replace Org's bullets with something less noisy
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package org-bullets
+       :config
+         (setq org-bullets-bullet-list '("☰" "☷" "▶" "◆" "●" "✸"))
+         (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
+     #+END_SRC
+
+** Programming
+*** General enhancements
+**** Jumping around
+     =dumb-jump= is an Emacs "jump to definition" package for 40+
+     languages that I find works really well.
+
+     Here I add certain functions to my custom jump keymap.
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package dumb-jump
+       :delight
+       :ensure-system-package
+         (rg . ripgrep)
+       :bind (:map my-jump-map
+              (("j" . dumb-jump-go)
+               ("b" . dumb-jump-back)
+               ("o" . dumb-jump-go-other-window)
+              ))
+        :config
+        (setq dumb-jump-selector 'ivy
+              dumb-jump-prefer-searcher 'rg
+              dumb-jump-default-project "~/Projects"))
+     #+END_SRC
+**** DWIM with comments
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package comment-dwim-2
+       :delight
+       :bind  (("M-;" . comment-dwim-2)))
+     #+END_SRC
+**** URL encode/decode functions
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (defun func-region (start end func)
+       "run a function over the region between START and END in current buffer."
+       (save-excursion
+         (let ((text (delete-and-extract-region start end)))
+           (insert (funcall func text)))))
+
+     (defun url-encode (start end)
+       "urlencode the region between START and END in current buffer."
+       (interactive "r")
+       (func-region start end #'url-hexify-string))
+
+     (defun url-decode (start end)
+       "de-urlencode the region between START and END in current buffer."
+       (interactive "r")
+       (func-region start end #'url-unhex-string))
+     #+END_SRC
+*** Company mode
+**** Add fuzzy matching to Company
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package company-flx
+       :config
+         (with-eval-after-load 'company
+           (company-flx-mode +1)))
+     #+END_SRC
+**** Enable company-mode globally
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (add-hook 'after-init-hook 'global-company-mode)
+     #+END_SRC
+*** Flycheck
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package flycheck
+      :delight " ✓ "
+      :config (add-hook 'after-init-hook 'global-flycheck-mode))
+    #+END_SRC
+**** =flycheck-color-mode-line=
+     An Emacs minor-mode for Flycheck which colors the mode line
+     according to the Flycheck state of the current buffer.
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package flycheck-color-mode-line
+       :after (flycheck)
+       :config
+         (add-hook 'flycheck-mode-hook 'flycheck-color-mode-line-mode))
+     #+END_SRC
+
+
+** Finalizing
+*** Add profiler to diagnose start-up issues
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (use-package esup
+        :defer 1)
+    #+END_SRC
+*** Better gc handling
+
+    I want to make sure any minibuffer operations
+    don't trigger the gc, so tools like flx won't pause.
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defun my/minibuffer-setup-hook ()
+        (setq gc-cons-threshold most-positive-fixnum))
+
+      (defun my/minibuffer-exit-hook ()
+        (setq gc-cons-threshold 800000))
+
+      (add-hook 'minibuffer-setup-hook #'my/minibuffer-setup-hook)
+      (add-hook 'minibuffer-exit-hook #'my/minibuffer-exit-hook)
+    #+END_SRC
+
+    Now everything is set up, return the gc level to a reasonable
+    default of 20MB to make the UI more responsive
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (setq gc-cons-threshold 20000000)
+    #+END_SRC
+
+*** Finally, display how long it took to start up
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (lambda (interactive) (emacs-init-time))
+    #+END_SRC
