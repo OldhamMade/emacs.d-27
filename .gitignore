@@ -80,7 +80,7 @@ flycheck_*.el
 /network-security.data
 
 
-
+# ignore generated files
 /transient/
 /straight/
 /recentf
@@ -89,3 +89,4 @@ flycheck_*.el
 /config.el
 /amx-items
 /.mc-lists.el
+/projectile.cache

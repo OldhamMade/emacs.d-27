@@ -42,71 +42,69 @@
 ** Investigate using =ycmd= for code completion
    https://github.com/abingham/emacs-ycmd#company-ycmd
 * Contents
-** Basic settings
-*** UTF-8 everywhere
-    #+BEGIN_SRC emacs-lisp :tangle yes
-      (set-charset-priority 'unicode)
-      (setq locale-coding-system   'utf-8)   ; pretty
-      (set-terminal-coding-system  'utf-8)   ; pretty
-      (set-keyboard-coding-system  'utf-8)   ; pretty
-      (set-selection-coding-system 'utf-8)   ; please
-      (prefer-coding-system        'utf-8)   ; with sugar on top
-      (setq default-process-coding-system '(utf-8-unix . utf-8-unix))
-    #+END_SRC
-*** Environment
-**** Flag that emacs is active (for use with tmux)
-     #+BEGIN_SRC emacs-lisp :tangle yes
-       (setenv "INSIDE_EMACS" "1")
-     #+END_SRC
-**** Pick up =PATH= from =zsh=
-     #+BEGIN_SRC emacs-lisp :tangle yes
-       (defun my/configure-path ()
-         (let ((path (shell-command-to-string ". ~/.zshrc; echo -n $PATH")))
-           (setenv "PATH" path)
-           (setq exec-path
-                 (append
-                  (split-string-and-unquote path ":")
-                  exec-path))))
-
-       (add-hook 'after-init-hook 'my/configure-path)
-     #+END_SRC
-**** Enable direnv
-     =direnv= is a great tool for managing local environment during
-     development. This package integrates =direnv= with Emacs so that
-     programs started from within emacs, such as inferior shells,
-     linters, compilers, and test runners, will be looked up in the
-     correct =$PATH=, and will be started with the correct environment
-     variables set.
-     #+BEGIN_SRC emacs-lisp :tangle yes
-       (use-package direnv
-         :delight
-         :config
-         (direnv-mode))
-     #+END_SRC
-**** =exec-path-from-shell=
-     #+BEGIN_SRC emacs-lisp :tangle yes
-       (use-package exec-path-from-shell
-         :delight
-         :config (when (memq window-system '(mac ns x))
-           (exec-path-from-shell-initialize)))
-     #+END_SRC
-**** Ensure system packages deps are available
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (use-package use-package-ensure-system-package)
-     #+END_SRC
 ** Startup
-*** Reduce GC on startup
-    Emacs will run garbage collection after `gc-cons-threshold' bytes of
-    consing. The default value is 800,000 bytes, or ~ 0.7 MiB. By
-    increasing to maximum we reduce the number of pauses due to
-    garbage collection during setup.
+*** Better GC handling
+**** Increase startup threshold
+     Emacs will run garbage collection after `gc-cons-threshold' bytes of
+     consing. The default value is 800,000 bytes, or ~ 0.7 MiB. By
+     increasing to maximum we reduce the number of pauses due to
+     garbage collection during setup.
 
-    At the end of this file this value returned to the default, once
-    startup has completed.
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (setq gc-cons-threshold most-positive-fixnum ; 2^61 bytes
+           gc-cons-percentage 0.6)
+     #+END_SRC
+**** Define a sane value for general use
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (defvar my--gc-cons-threshold 16777216)
+     #+END_SRC
+**** Set sane value after startup
+     At the end of setup this value should be returned to the default, once
+     startup has completed.
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (add-hook 'emacs-startup-hook
+       (lambda ()
+       (setq gc-cons-threshold my--gc-cons-threshold
+             gc-cons-percentage 0.1)))
+     #+END_SRC
+**** Handle the minibuffer differently
+     I want to make sure any minibuffer operations
+     won't trigger gc, so tools like =flx= won't pause.
+
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (defun my/minibuffer-setup-hook ()
+       (setq gc-cons-threshold most-positive-fixnum))
+
+     (defun my/minibuffer-exit-hook ()
+       ;; Defer it so that commands launched immediately after will enjoy the
+       ;; benefits.
+       (run-at-time
+         1 nil (lambda () (setq gc-cons-threshold my--gc-cons-threshold))))
+
+     (add-hook 'minibuffer-setup-hook #'my/minibuffer-setup-hook)
+     (add-hook 'minibuffer-exit-hook #'my/minibuffer-exit-hook)
+     #+END_SRC
+
+*** Unset file-name-handler-alist temporarily
+    Emacs consults this variable every time a file is read or library
+    loaded, or when certain functions in the file API are used (like
+    expand-file-name or file-truename).
+
+    It does so to check if a special handler is needed to read the
+    file, but none of these handlers are necessary for startup, so it
+    is generally safe to disable it temporarily:
 
     #+BEGIN_SRC emacs-lisp :tangle yes
-    (setq gc-cons-threshold most-positive-fixnum)
+    ;; copy to custom var
+    (defvar my--file-name-handler-alist file-name-handler-alist)
+    ;; set original to nil
+    (setq file-name-handler-alist nil)
+    ;; Restore after startup
+    (add-hook 'emacs-startup-hook
+      (lambda ()
+        (setq file-name-handler-alist my--file-name-handler-alist)))
     #+END_SRC
+
 *** Add timestamps to messages
     Adding timestamps to the messages so we can see whether anything
     is causing emacs to block for a significant amount of time.
@@ -201,6 +199,58 @@
     #+BEGIN_SRC emacs-lisp :tangle yes
     (setq help-window-select t)
     #+END_SRC
+** Basic settings
+*** UTF-8 everywhere
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (set-charset-priority 'unicode)
+      (setq locale-coding-system   'utf-8)   ; pretty
+      (set-terminal-coding-system  'utf-8)   ; pretty
+      (set-keyboard-coding-system  'utf-8)   ; pretty
+      (set-selection-coding-system 'utf-8)   ; please
+      (prefer-coding-system        'utf-8)   ; with sugar on top
+      (setq default-process-coding-system '(utf-8-unix . utf-8-unix))
+    #+END_SRC
+*** Environment
+**** Flag that emacs is active (for use with tmux)
+     #+BEGIN_SRC emacs-lisp :tangle yes
+       (setenv "INSIDE_EMACS" "1")
+     #+END_SRC
+**** Pick up =PATH= from =zsh=
+     #+BEGIN_SRC emacs-lisp :tangle yes
+       (defun my/configure-path ()
+         (let ((path (shell-command-to-string ". ~/.zshrc; echo -n $PATH")))
+           (setenv "PATH" path)
+           (setq exec-path
+                 (append
+                  (split-string-and-unquote path ":")
+                  exec-path))))
+
+       (add-hook 'after-init-hook 'my/configure-path)
+     #+END_SRC
+**** Enable direnv
+     =direnv= is a great tool for managing local environment during
+     development. This package integrates =direnv= with Emacs so that
+     programs started from within emacs, such as inferior shells,
+     linters, compilers, and test runners, will be looked up in the
+     correct =$PATH=, and will be started with the correct environment
+     variables set.
+     #+BEGIN_SRC emacs-lisp :tangle yes
+       (use-package direnv
+         :delight
+         :config
+         (direnv-mode))
+     #+END_SRC
+**** =exec-path-from-shell=
+     #+BEGIN_SRC emacs-lisp :tangle yes
+       (use-package exec-path-from-shell
+         :delight
+         :config (when (memq window-system '(mac ns x))
+           (exec-path-from-shell-initialize)))
+     #+END_SRC
+**** Ensure system packages deps are available
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package use-package-ensure-system-package)
+     #+END_SRC
 ** Interface
 *** Theme
     My personal theme: https://github.com/OldhamMade/leiptr-them
@@ -405,11 +455,9 @@
 
 ** Highlighting
 *** Highlight syntax by default
-
     #+BEGIN_SRC emacs-lisp :tangle yes
     (global-font-lock-mode 1)
     #+END_SRC
-
 *** Highlight indentation
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package highlight-indentation
@@ -422,18 +470,31 @@
     #+END_SRC
 
 *** Highlight delimiters
+**** Show paren pairs
+     I want to see the paren matches, but I don't want to be too
+     distracted by them.
 
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (use-package rainbow-delimiters
-      :delight
-      :config
-        (add-hook 'prog-mode-hook 'rainbow-delimiters-mode)
-        (add-hook 'sass-mode-hook 'rainbow-delimiters-mode))
-    #+END_SRC
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (setq show-paren-delay 0
+           show-paren-style 'parenthesis)
+     (set-face-background 'show-paren-match "#456")
+     (set-face-foreground 'show-paren-match "#cde")
+     (set-face-attribute 'show-paren-match nil :weight 'extra-bold)
+     (show-paren-mode t)
+     #+END_SRC
+**** Highlight delimiters in differing, paired colours
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package rainbow-delimiters
+       :delight
+       :config
+         (add-hook 'org-mode-hook 'rainbow-delimiters-mode)
+         (add-hook 'prog-mode-hook 'rainbow-delimiters-mode)
+         (add-hook 'sass-mode-hook 'rainbow-delimiters-mode))
+     #+END_SRC
 
 *** Highlight variables
-    Rainbow identifiers subtly changes the look of variables, to make them a little
-    easier to visually search
+    Rainbow identifiers subtly changes the look of variables, to make
+    them a little easier to visually search
 
     #+BEGIN_SRC emacs-lisp :tangle yes
       (use-package rainbow-identifiers
@@ -470,19 +531,19 @@
     #+END_SRC
 *** Highlight colour references, displaying the colour referenced
     #+BEGIN_SRC emacs-lisp :tangle yes
-      (use-package rainbow-mode
-        :config
-        (progn
-          (add-hook 'sass-mode-hook 'rainbow-mode)
-          (add-hook 'css-mode-hook 'rainbow-mode)
-          (add-hook 'emacs-lisp-mode-hook 'rainbow-mode)
-          ))
+    (use-package rainbow-mode
+      :config
+      (progn
+        (add-hook 'sass-mode-hook 'rainbow-mode)
+        (add-hook 'css-mode-hook 'rainbow-mode)
+        (add-hook 'emacs-lisp-mode-hook 'rainbow-mode)
+        ))
     #+END_SRC
 *** Highlight changes to the buffer caused by commands such as ‘undo’, ‘yank’/’yank-pop’, etc.
     #+BEGIN_SRC emacs-lisp :tangle no
-      (use-package volatile-highlights
-        :delight
-        :config (volatile-highlights-mode t))
+    (use-package volatile-highlights
+      :delight
+      :config (volatile-highlights-mode t))
     #+END_SRC
 ** Navigation
 *** =which-key=
@@ -544,6 +605,7 @@
          (ivy-mode 1)
        :bind
          (("C-x C-b" . ivy-switch-buffer)
+          ("C-x b" . ivy-switch-buffer)
           ("C-c i r" . ivy-resume))
        :config
          (setq ivy-use-virtual-buffers t
@@ -555,8 +617,8 @@
                ivy-initial-inputs-alist nil
                ;; enable fuzzy matches eveywhere
 	       ivy-re-builders-alist
-	         '((swiper . ivy--regex-plus) ;; disable fuzzy for swiper
-                   (t . ivy--regex-fuzzy))
+	         '((swiper . ivy--regex-plus)
+               (t . ivy--regex-fuzzy))  ;; fuzzy-search everywhere
 	       ivy-count-format "(%d/%d) ")
          ;; Use C-j for immediate termination with the current value, and RET
          ;; for continuing completion for that directory. This is the ido
@@ -595,7 +657,6 @@
      #+BEGIN_SRC emacs-lisp :tangle yes
      (use-package swiper
        :delight)
-       ;:bind ("\C-s" . swiper))
      #+END_SRC
 **** =ivy-rich=
      =ivy-rich= is a more friendly interface for ivy, providing inline help
@@ -625,7 +686,8 @@
              (file-name-nondirectory
               (directory-file-name
                (file-name-directory (projectile-project-root))))
-           "Not in Project")))
+           "Not in Project"))
+       )
      #+END_SRC
 **** Integrate =projectile= with =counsel=
      #+BEGIN_SRC emacs-lisp :tangle yes
@@ -716,26 +778,6 @@
     #+END_SRC
 
 *** Switching buffers
-**** Jump Between Buffers
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (use-package frog-jump-buffer
-      :bind
-        ("C-x b" . frog-jump-buffer)
-      :init
-      (setq frog-jump-buffer-posframe-handler 'posframe-poshandler-frame-center)
-      (setq frog-jump-buffer-posframe-parameters
-        '((internal-border-width . 10)
-          (background-color . "gray10")
-          ))
-      :config
-      (dolist (regexp '("TAGS" "^\\*Compile-log" "-debug\\*$" "^\\:"
-                        "errors\\*$" "^\\*Backtrace" "-ls\\*$"
-                        "\\*straight-process" "stderr\\*$" "^\\*Flymake"
-                        "^\\*vc" "^\\*Warnings"
-                        "^\\*eldoc" "\\^*Shell Command" "\\*direnv"))
-        (push regexp frog-jump-buffer-ignore-buffers)))
-    #+END_SRC
-
 *** Copy buffer path to kill ring
     #+BEGIN_SRC emacs-lisp :tangle yes
     (defun copy-full-path-to-kill-ring ()
@@ -878,7 +920,6 @@
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package smart-region
       :after (multiple-cursors)
-      :delight
       :config
         (smart-region-on))
     #+END_SRC
@@ -1026,7 +1067,11 @@
 
     (use-package persp-projectile
       :config
-      (define-key projectile-mode-map (kbd "s-s") 'projectile-persp-switch-project))
+      (define-key perspective-map (kbd "x") 'projectile-persp-switch-project)
+      ;; override projectile-switch-project since
+      ;; we always want to be in a perspective
+      (define-key projectile-command-map "p" 'projectile-persp-switch-project)
+      )
     #+END_SRC
 
 *** Recover window split using =C-c <left>= with winner-mode
@@ -1059,6 +1104,7 @@
 
     (use-package magit
       :after projectile
+      :bind ("C-x g" . magit-status)
       :commands (magit-status
                  magit-log
                  magit-commit
@@ -1146,6 +1192,37 @@
          (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
      #+END_SRC
 
+** Utility functions
+   This section contains generally useful functions.
+*** Paths & Dirs
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (defun parent-directory (dir)
+      (unless (equal "/" dir)
+        (file-name-directory (directory-file-name dir))))
+
+    (defun find-file-in-hierarchy (current-dir fname)
+      "Search for a file named FNAME upwards through the directory hierarchy, starting from CURRENT-DIR"
+      (let ((file (concat current-dir fname))
+            (parent (parent-directory (expand-file-name current-dir))))
+        (if (file-exists-p file)
+            file
+          (when parent
+            (find-file-in-hierarchy parent fname)))))
+
+    (defun find-dir-in-hierarchy (current-dir dname)
+      "Search for a dir named DNAME upwards through the directory hierarchy, starting from CURRENT-DIR"
+      (let ((dir (concat current-dir dname))
+            (parent (parent-directory (expand-file-name current-dir))))
+        (if (file-directory-p dir)
+            dir
+          (when parent
+            (find-dir-in-hierarchy parent dname)))))
+
+    (defun find-include-dir ()
+      "Search for the next available include dir from START."
+      (let ((idir (find-dir-in-hierarchy (buffer-file-name) "include")))
+        (if idir (concat "-I" idir) "")))
+    #+END_SRC
 ** Programming
 *** General enhancements
 **** Jumping around
@@ -1204,6 +1281,10 @@
      #+BEGIN_SRC emacs-lisp :tangle yes
      (add-hook 'after-init-hook 'global-company-mode)
      #+END_SRC
+**** Make Company open a little faster
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (setq company-idle-delay 0.2)
+     #+END_SRC
 *** Flycheck
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package flycheck
@@ -1220,37 +1301,251 @@
          (add-hook 'flycheck-mode-hook 'flycheck-color-mode-line-mode))
      #+END_SRC
 
+*** Elixir
+    Elixir is fast becoming my primary programming language,
+    so there's lots of tweaks and focus here
+**** Add =elixir-mode=
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package elixir-mode
+       :mode ("\\.exs?\\'" . alchemist-mode))
+     #+END_SRC
+**** Add =ruby-end= to support the =end= keyword
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package ruby-end)
+     #+END_SRC
+**** Add Alchemist for elixir programming.
+
+     #+BEGIN_SRC emacs-lisp :tangle yes
+       (use-package alchemist
+         :delight
+         (emacs-lisp-mode "elisp")
+         (elixir-mode "[ex]")
+         (alchemist-mode "[al]")
+         (alchemist-hex-mode "[alhex]")
+         (alchemist-test-mode "[altest]")
+         (ruby-end-mode "")
+         :mode ("\\.exs?\\'" . alchemist-mode)
+         )
+
+       (defun elixir-mode-prettify-symbols-hook ()
+         (setq-local
+          prettify-symbols-alist
+          (append
+           '(("->" . ?→)
+             ("=>" . ?⇒)
+             ("<-" . ?←)
+             ("<=" . ?⇐)
+             (">=" . ?≥)
+             ("=<" . ?≤)
+             ("!=" . ?≠)
+             ("fn" . ?ƒ))
+           prettify-symbols-alist)))
+
+
+       (add-hook 'elixir-mode-hook 'alchemist-mode)
+       (add-hook 'elixir-mode-hook 'company-mode)
+       (add-hook 'elixir-mode-hook 'elixir-mode-prettify-symbols-hook)
+       (add-hook 'elixir-mode-hook
+                 (lambda ()
+                   (set (make-variable-buffer-local 'ruby-end-expand-keywords-before-re)
+                        "\\(?:^\\|\\s-+\\)\\(?:do\\)")
+                   (set (make-variable-buffer-local 'ruby-end-check-statement-modifiers)
+                        nil)
+                   (ruby-end-mode 1)
+                   (bind-keys*
+                    ("C-c a" . my/alchemist-mode/body))
+                   ))
+       (eval-after-load 'elixir-mode '(require 'ruby-mode-expansions))
+     #+END_SRC
+
+**** Add support for .eex files
+     Here we'll switch on =web-mode= so that we can edit HTML properly.
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (add-to-list 'auto-mode-alist '("\\.eex\\'" . web-mode))
+     #+END_SRC
+
+**** Add support for ExActor keywords
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (font-lock-add-keywords 'elixir-mode
+       '(("\\<\\(defabcast\\|defabcastp\\|defcall\\|defcallp\\|defcast\\|defcastp\\|defhandlecall\\|defhandlecast\\|defhandleinfo\\|definit\\|defmulticall\\|defmulticallp\\|defstart\\|defstartp\\)\\>" 1 font-lock-keyword-face)))
+     #+END_SRC
+
+**** Configure code folding
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (add-to-list 'hs-special-modes-alist
+       '(elixir-mode
+         ("\\(cond\\|quote\\|defmacro\\|defmacrop\\|defp\\|def\\|if\\) .*\\(do\\)" 2) "\\(end\\)" "#"
+           nil nil))
+     #+END_SRC
+*** Erlang
+    I have to use the http://zotonic.com framework at my day job, so
+    let's add erlang and some zotonic helpers
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (defun find-zotonic-include-dir ()
+      "Search for the next available zotonic include dir from START."
+      (let ((zdir (find-dir-in-hierarchy
+        (file-name-directory buffer-file-name)
+        (concat (file-name-as-directory "zotonic") "include"))))
+          (if zdir (concat "-I" zdir) "")))
+
+    (defun my/define-erlang-flychecker ()
+      (flycheck-define-checker erlang-otp
+        "An Erlang syntax checker using the Erlang interpreter."
+        :command ("~/.asdf/shims/erlc" "-o" temporary-directory "-Wall"
+                  (option-list "-I" flycheck-erlang-include-path)
+                  (eval (find-zotonic-include-dir))
+                  source)
+        :error-patterns
+        ((warning line-start (file-name) ":" line ": Warning:" (message) line-end)
+         (error line-start (file-name) ":" line ": " (message) line-end))
+        :modes erlang-mode))
+
+    (defun erlang-mode-flycheck-hook ()
+      (flycheck-select-checker 'erlang-otp)
+      (flycheck-mode))
+
+    (defun erlang-mode-prettify-symbols-hook ()
+      (setq-local
+       prettify-symbols-alist
+       (append
+        '(("->" . ?→)
+          ("=>" . ?⇒)
+          ("<-" . ?←)
+          ("<=" . ?⇐)
+          (">=" . ?≥)
+          ("=<" . ?≤)
+          ("=/=" . ?≠)
+          ("fun" . ?ƒ))
+        prettify-symbols-alist)))
+
+    (use-package erlang
+      :after (flycheck)
+      :init (my/define-erlang-flychecker)
+      :mode ("\\.erl\\'" . erlang-mode)
+      :hook ((erlang-mode . erlang-mode-flycheck-hook)
+             (erlang-mode . erlang-mode-prettify-symbols-hook)
+             (erlang-mode . company-mode)))
+    #+END_SRC
+
+**** Add zotonic-tpl support
+     #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package zotonic-tpl-mode
+      :straight (zotonic-tpl-mode :type git :host github :repo "OldhamMade/zotonic-tpl-mode")
+      :config
+        (add-to-list 'auto-mode-alist '("\\.tpl\\'" . zotonic-tpl-mode)))
+     #+END_SRC
+
+*** Nim
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package nim-mode
+      :mode ("\\.nim\\'" . nim-mode))
+    #+END_SRC
+*** Pony
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package ponylang-mode
+      :mode ("\\.pony\\'" . ponylang-mode)
+      :config (setq tab-width 2))
+    #+END_SRC
+
+**** Add flycheck mode
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package flycheck-pony)
+     #+END_SRC
+
+
+
+*** HTML et al
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (use-package web-mode
+        :config
+        (add-to-list 'auto-mode-alist '("\\.html?\\'" . web-mode))
+        (add-to-list 'auto-mode-alist '("\\.mustache\\'" . web-mode))
+        ;(add-to-list 'auto-mode-alist '("\\.jsx\\'" . web-mode))
+        (add-to-list 'auto-mode-alist '("\\.ecr\\'" . web-mode))
+        (add-to-list 'auto-mode-alist '("\\.erb\\'" . web-mode))
+
+        ;; use eslint with web-mode for jsx files
+        (with-eval-after-load 'flycheck
+          (flycheck-add-mode 'javascript-eslint 'web-mode))
+
+        ;; adjust indents for web-mode to 2 spaces
+        (defun my-web-mode-hook ()
+          "Hooks for Web mode. Adjust indents"
+          ;;; http://web-mode.org/
+          (setq web-mode-markup-indent-offset 2)
+          (setq web-mode-css-indent-offset 2)
+          (setq web-mode-code-indent-offset 2))
+
+        (add-hook 'web-mode-hook  'my-web-mode-hook))
+    #+END_SRC
+*** JavaScript
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package js2-mode
+      :config
+      (progn
+        (setq-default js-indent-level 4)
+        (setq-default js2-basic-offset 4)
+        (setq tab-width 4)
+        (setq js-switch-indent-offset 4)
+
+        (add-to-list 'auto-mode-alist '("\\.js\\'" . js2-mode))
+        ;; Better imenu
+        (add-hook 'js2-mode-hook #'js2-imenu-extras-mode)
+        (add-hook 'js2-mode-hook 'company-mode)
+        ))
+    #+END_SRC
+*** Sass/Scss
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package sass-mode
+      :delight "sass"
+      :mode ("\\.s(c|a)ss\\'" . sass-mode))
+    #+END_SRC
+*** Yaml
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package yaml-mode
+      :mode ("\\.ya?ml\\'" . yaml-mode))
+    #+END_SRC
+*** Markdown
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package markdown-mode
+      :delight "md"
+      :mode ("\\.md\\'" . markdown-mode))
+    #+END_SRC
+*** Docker
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package dockerfile-mode)
+    #+END_SRC
+*** RAML
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package raml-mode
+      :straight (raml-mode :type git :host github :repo "victorquinn/raml-mode")
+      :init (setq raml-indent-offset 2)
+      :mode "\\.raml\\'")
+    #+END_SRC
+
+** Terminal
+*** Multi-term
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package multi-term
+      :config
+      (setq multi-term-program "/bin/zsh"))
+    #+END_SRC
+
+*** Misc tweaks
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq term-scroll-show-maximum-output 1)
+    (setq system-uses-terminfo nil)
+    (add-hook 'shell-mode-hook 'ansi-color-for-comint-mode-on)
+    (add-to-list 'comint-output-filter-functions 'ansi-color-process-output)
+    #+END_SRC
 
 ** Finalizing
 *** Add profiler to diagnose start-up issues
     #+BEGIN_SRC emacs-lisp :tangle yes
-      (use-package esup
-        :defer 1)
+    (use-package esup)
     #+END_SRC
-*** Better gc handling
-
-    I want to make sure any minibuffer operations
-    don't trigger the gc, so tools like flx won't pause.
-
-    #+BEGIN_SRC emacs-lisp :tangle yes
-      (defun my/minibuffer-setup-hook ()
-        (setq gc-cons-threshold most-positive-fixnum))
-
-      (defun my/minibuffer-exit-hook ()
-        (setq gc-cons-threshold 800000))
-
-      (add-hook 'minibuffer-setup-hook #'my/minibuffer-setup-hook)
-      (add-hook 'minibuffer-exit-hook #'my/minibuffer-exit-hook)
-    #+END_SRC
-
-    Now everything is set up, return the gc level to a reasonable
-    default of 20MB to make the UI more responsive
-
-    #+BEGIN_SRC emacs-lisp :tangle yes
-      (setq gc-cons-threshold 20000000)
-    #+END_SRC
-
 *** Finally, display how long it took to start up
     #+BEGIN_SRC emacs-lisp :tangle yes
-      (lambda (interactive) (emacs-init-time))
+    (add-hook 'emacs-startup-hook
+       (lambda () (interactive) (emacs-init-time)))
     #+END_SRC
