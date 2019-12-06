@@ -702,6 +702,80 @@
          (counsel-projectile-mode))
      #+END_SRC
 
+** Files
+*** Enable auto-save of files as they are edited, so that no changes are lost
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package super-save
+      :delight
+      :config
+      (progn
+        (super-save-mode +1)
+        (setq super-save-auto-save-when-idle t)  ;; autosave to the real file
+        (setq super-save-idle-duration 15)  ;; autosave idle wait
+        (setq auto-save-default nil)  ;; disable autosave to backup file
+        ))
+    #+END_SRC
+*** Backup files to a local directory.
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq auto-save-file-name-transforms `((".*" ,"~/.emacs.d/auto-backup/" t)))
+    (setq
+     backup-by-copying t      ; don't clobber symlinks
+     backup-directory-alist
+     '(("." . "~/.emacs.d/auto-backup/"))    ; don't litter my fs tree
+     delete-old-versions t
+     kept-new-versions 6
+     kept-old-versions 2
+     version-control t)       ; use versioned backups
+    #+END_SRC
+*** Disable annoying lockfiles
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq create-lockfiles nil)
+    #+END_SRC
+*** Always append a new line to the file
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq require-final-newline t)
+    #+END_SRC
+*** Clean whitespace intelligently on key-press
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package shrink-whitespace
+      :delight
+      :config (global-set-key (kbd "<C-M-backspace>") 'shrink-whitespace))
+    #+END_SRC
+
+*** Copy Filename to Clipboard
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (defun copy-file-name-to-clipboard ()
+      "Copy the current buffer file name to the clipboard."
+      (interactive)
+      (let ((filename (if (equal major-mode 'dired-mode)
+                          default-directory
+                        (buffer-file-name))))
+        (when filename
+          (kill-new filename)
+          (message "Copied buffer file name '%s' to the clipboard." filename))))
+    #+END_SRC
+*** Reveal in Finder
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package reveal-in-osx-finder)
+    #+END_SRC
+*** Rename File and Buffer
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (defun rename-file-and-buffer ()
+      "Rename the current buffer and file it is visiting."
+      (interactive)
+      (let ((filename (buffer-file-name)))
+        (if (not (and filename (file-exists-p filename)))
+            (message "Buffer is not visiting a file!")
+          (let ((new-name (read-file-name "New name: " filename)))
+            (cond
+             ((vc-backend filename) (vc-rename-file filename new-name))
+             (t
+              (rename-file filename new-name t)
+              (rename-buffer new-name)
+              (set-visited-file-name new-name)
+              (set-buffer-modified-p nil)))))))
+    #+END_SRC
+
 ** Buffers
 *** Initial buffer major mode: text
     #+BEGIN_SRC emacs-lisp :tangle yes
