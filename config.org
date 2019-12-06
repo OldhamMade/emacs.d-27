@@ -876,78 +876,87 @@
       :delight
       :config (global-undo-tree-mode))
     #+END_SRC
-*** Enable automatic indenting
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (electric-indent-mode +1)
-    #+END_SRC
-*** Set tab width to 4 for all buffers
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (setq-default tab-width 4)
-    #+END_SRC
-
-*** Multiple cursors
-    Allows editing with multiple points on the screen.
-**** Base package
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (use-package multiple-cursors
-       :delight
-       :bind (("M-M ." . mc/mark-all-dwim)
-              ("M-M l" . mc/edit-lines)
-              ("M-M a" . mc/mark-all-like-this)
-              ("M-M n" . mc/mark-next-like-this)
-              ("M-M p" . mc/mark-previous-like-this))
-       :config (define-key mc/keymap (kbd "<return>") nil))
-     #+END_SRC
-**** =ace-mc=
-     =ace-mc= makes it really easy to add and remove multiple cursors
-     using ace jump mode.
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (use-package ace-mc
-       :after (multiple-cursors)
-       :delight
-       :bind ("M-M m" . ace-mc-add-multiple-cursors))
-     #+END_SRC
-*** Smart regions
-    Smart region guesses what you want to select by one command:
-
-    - If you call this command multiple times at the same position, it
-      expands the selected region (with `er/expand-region').
-    - Else, if you move from the mark and call this command, it selects
-      the region rectangular (with `rectangle-mark-mode').
-    - Else, if you move from the mark and call this command at the same
-      column as mark, it adds a cursor to each line (with `mc/edit-lines').
-
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (use-package smart-region
-      :after (multiple-cursors)
-      :config
-        (smart-region-on))
-    #+END_SRC
-*** Expanding regions
-    I use expand region a lot. =M-[= feels like a good binding, with
-    the mental connection of "open" (expand) and conversely =M-]= as
-    "close" (contract).
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (use-package expand-region
-      :delight
-      :bind (("M-[" . er/expand-region)
-             ("M-]" . er/contract-region)))
-    #+END_SRC
-*** Auto-pair braces
-    Emacs 24.4+ comes with =electric-pair-mode= which matches =autopair=
-    in terms of functionality.
-
-    I disable it in the minibuffer as it usually just gets in the way there.
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (electric-pair-mode t)
-    (add-hook 'minibuffer-setup-hook (lambda () (electric-pair-mode -1)))
-    (add-hook 'minibuffer-exit-hook (lambda () (electric-pair-mode t)))
-    #+END_SRC
 *** Unfill
     Unfill adds the inverse of fill-paragraph/-region.
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package unfill)
     #+END_SRC
+*** Indents
+**** Enable automatic indenting
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (electric-indent-mode +1)
+     #+END_SRC
+**** Set tab width to 4 for all buffers
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (setq-default tab-width 4)
+     #+END_SRC
+*** Cursors
+**** Multiple cursors
+     Allows editing with multiple points on the screen.
+***** Base package
+      #+BEGIN_SRC emacs-lisp :tangle yes
+      (use-package multiple-cursors
+        :delight
+        :bind (("M-M ." . mc/mark-all-dwim)
+               ("M-M l" . mc/edit-lines)
+               ("M-M a" . mc/mark-all-like-this)
+               ("M-M n" . mc/mark-next-like-this)
+               ("M-M p" . mc/mark-previous-like-this))
+        :config (define-key mc/keymap (kbd "<return>") nil))
+      #+END_SRC
+***** =ace-mc=
+      =ace-mc= makes it really easy to add and remove multiple cursors
+      using ace jump mode.
+      #+BEGIN_SRC emacs-lisp :tangle yes
+      (use-package ace-mc
+        :after (multiple-cursors)
+        :delight
+        :bind ("M-M m" . ace-mc-add-multiple-cursors))
+      #+END_SRC
+**** Smart regions
+     Smart region guesses what you want to select by one command:
+
+     - If you call this command multiple times at the same position, it
+       expands the selected region (with `er/expand-region').
+     - Else, if you move from the mark and call this command, it selects
+       the region rectangular (with `rectangle-mark-mode').
+     - Else, if you move from the mark and call this command at the same
+       column as mark, it adds a cursor to each line (with `mc/edit-lines').
+
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package smart-region
+       :after (multiple-cursors)
+       :hook (after-init . smart-region-on))
+     #+END_SRC
+**** Remember cursor position when reopening files
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (save-place-mode 1)
+     (setq save-place-forget-unreadable-files nil)
+     #+END_SRC
+*** Braces
+**** Expanding regions
+     I use expand region a lot. =M-[= feels like a good binding, with
+     the mental connection of "open" (expand) and conversely =M-]= as
+     "close" (contract).
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package expand-region
+       :delight
+       :bind (("M-[" . er/expand-region)
+              ("M-]" . er/contract-region))
+       :config
+       (er/enable-mode-expansions 'elixir-mode 'er/add-ruby-mode-expansions)
+       (er/enable-mode-expansions 'web-mode 'er/add-js-mode-expansions))
+     #+END_SRC
+**** Auto-pair braces
+     Emacs 24.4+ comes with =electric-pair-mode= which matches =autopair=
+     in terms of functionality.
+
+     I disable it in the minibuffer as it usually just gets in the way there.
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (electric-pair-mode t)
+     (add-hook 'minibuffer-setup-hook (lambda () (electric-pair-mode -1)))
+     (add-hook 'minibuffer-exit-hook (lambda () (electric-pair-mode t)))
+     #+END_SRC
 *** Move text with =M-<up>= and =M-<down>=
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package move-text
@@ -977,6 +986,27 @@
              )
       :config
         (crux-reopen-as-root-mode))
+    #+END_SRC
+*** Whitespace
+**** Delete trailing whitespace
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (global-set-key (kbd "C-c DEL") 'delete-trailing-whitespace)
+     #+END_SRC
+**** Allow inserting into whitespace-separated blocks
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package dynamic-spaces
+       :config (dynamic-spaces-global-mode 1))
+     #+END_SRC
+*** Inflection (camel/kebab/snake case)
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package string-inflection
+      :bind ("M-C" . string-inflection-all-cycle))
+    #+END_SRC
+*** Up/Down-case DWIM
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (global-set-key (kbd "M-c") 'capitalize-dwim)
+    (global-set-key (kbd "M-u") 'upcase-dwim)
+    (global-set-key (kbd "M-l") 'downcase-dwim)
     #+END_SRC
 ** Spelling
 *** =flyspell-correct-ivy=
@@ -1091,6 +1121,21 @@
       (global-diff-hl-mode 1))
     #+END_SRC
 
+*** Browse-at-remote
+    =browse-at-remote= opens the current buffer at
+    github/gitlab/bitbucket/stash/git.savannah.gnu.org/sourcehut
+    from Emacs.
+
+    It supports various kind of emacs buffer, like:
+    - file buffer
+    - dired buffer
+    - magit-mode buffers representing code
+    - vc-annotate mode (use get there by pressing C-x v g by default)
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package browse-at-remote
+      :config (global-set-key (kbd "C-c g g") 'browse-at-remote))
+    #+END_SRC
 *** Use =magit= and =forge= with git repositories
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package magit-todos
@@ -1270,13 +1315,6 @@
        (func-region start end #'url-unhex-string))
      #+END_SRC
 *** Company mode
-**** Add fuzzy matching to Company
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (use-package company-flx
-       :config
-         (with-eval-after-load 'company
-           (company-flx-mode +1)))
-     #+END_SRC
 **** Enable company-mode globally
      #+BEGIN_SRC emacs-lisp :tangle yes
      (add-hook 'after-init-hook 'global-company-mode)
@@ -1307,7 +1345,12 @@
 **** Add =elixir-mode=
      #+BEGIN_SRC emacs-lisp :tangle yes
      (use-package elixir-mode
-       :mode ("\\.exs?\\'" . alchemist-mode))
+       :delight
+       (elixir-mode "[ex]")
+       (ruby-end-mode "")
+       :init (add-hook 'elixir-mode-hook
+          (lambda () (add-hook 'before-save-hook 'elixir-format nil t)))
+       :mode ("\\.exs?\\'" . elixir-mode))
      #+END_SRC
 **** Add =ruby-end= to support the =end= keyword
      #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1316,46 +1359,45 @@
 **** Add Alchemist for elixir programming.
 
      #+BEGIN_SRC emacs-lisp :tangle yes
-       (use-package alchemist
-         :delight
-         (emacs-lisp-mode "elisp")
-         (elixir-mode "[ex]")
-         (alchemist-mode "[al]")
-         (alchemist-hex-mode "[alhex]")
-         (alchemist-test-mode "[altest]")
-         (ruby-end-mode "")
-         :mode ("\\.exs?\\'" . alchemist-mode)
-         )
+     (use-package alchemist
+       :delight
+       (alchemist-mode "[al]")
+       (alchemist-hex-mode "[hex]")
+       (alchemist-test-mode "[altest]")
+       :init
+       (setq alchemist-compile-project-when-needed t)
+       (setq alchemist-hooks-compile-on-save t)
+       )
 
-       (defun elixir-mode-prettify-symbols-hook ()
-         (setq-local
-          prettify-symbols-alist
-          (append
-           '(("->" . ?→)
-             ("=>" . ?⇒)
-             ("<-" . ?←)
-             ("<=" . ?⇐)
-             (">=" . ?≥)
-             ("=<" . ?≤)
-             ("!=" . ?≠)
-             ("fn" . ?ƒ))
-           prettify-symbols-alist)))
+     (defun elixir-mode-prettify-symbols-hook ()
+       (setq-local
+        prettify-symbols-alist
+        (append
+         '(("->" . ?→)
+           ("=>" . ?⇒)
+           ("<-" . ?←)
+           ("<=" . ?⇐)
+           (">=" . ?≥)
+           ("=<" . ?≤)
+           ("!=" . ?≠)
+           ("fn" . ?ƒ))
+         prettify-symbols-alist)))
 
 
-       (add-hook 'elixir-mode-hook 'alchemist-mode)
-       (add-hook 'elixir-mode-hook 'company-mode)
-       (add-hook 'elixir-mode-hook 'elixir-mode-prettify-symbols-hook)
-       (add-hook 'elixir-mode-hook
-                 (lambda ()
-                   (set (make-variable-buffer-local 'ruby-end-expand-keywords-before-re)
-                        "\\(?:^\\|\\s-+\\)\\(?:do\\)")
-                   (set (make-variable-buffer-local 'ruby-end-check-statement-modifiers)
-                        nil)
-                   (ruby-end-mode 1)
-                   (bind-keys*
-                    ("C-c a" . my/alchemist-mode/body))
-                   ))
-       (eval-after-load 'elixir-mode '(require 'ruby-mode-expansions))
+     (add-hook 'elixir-mode-hook 'alchemist-mode)
+     (add-hook 'elixir-mode-hook 'company-mode)
+     (add-hook 'elixir-mode-hook 'elixir-mode-prettify-symbols-hook)
+     (add-hook 'elixir-mode-hook
+               (lambda ()
+                 (set (make-variable-buffer-local 'ruby-end-expand-keywords-before-re)
+                      "\\(?:^\\|\\s-+\\)\\(?:do\\)")
+                 (set (make-variable-buffer-local 'ruby-end-check-statement-modifiers)
+                      nil)
+                 (ruby-end-mode 1)
+                 ;;(bind-keys*
+                 ;; ("C-c a" . my/alchemist-mode/body))
+                 ))
+     (eval-after-load 'elixir-mode '(require 'ruby-mode-expansions))
      #+END_SRC
 
 **** Add support for .eex files
@@ -1453,7 +1495,6 @@
      #+END_SRC
 
 
-
 *** HTML et al
     #+BEGIN_SRC emacs-lisp :tangle yes
       (use-package web-mode
@@ -1547,5 +1588,7 @@
 *** Finally, display how long it took to start up
     #+BEGIN_SRC emacs-lisp :tangle yes
     (add-hook 'emacs-startup-hook
-       (lambda () (interactive) (emacs-init-time)))
+       (lambda ()
+         (interactive)
+         (message "Emacs startup time: %d seconds." (emacs-init-time))))
     #+END_SRC

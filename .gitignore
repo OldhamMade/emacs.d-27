@@ -90,3 +90,4 @@ flycheck_*.el
 /amx-items
 /.mc-lists.el
 /projectile.cache
+/places
