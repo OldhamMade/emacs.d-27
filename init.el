@@ -40,11 +40,12 @@
   (load bootstrap-file nil 'nomessage))
 
 (straight-use-package 'use-package)
-(setq straight-use-package-by-default 1)
+(setq straight-use-package-by-default 1
+      straight-check-for-modifications '(check-on-save find-when-checking))
 
 (let ((file-name-handler-alist nil))
   (require 'ob-tangle)
   (setq dotfiles-dir (file-name-directory
                       (or (buffer-file-name) load-file-name)))
-  (org-babel-load-file (expand-file-name "config.org" dotfiles-dir))
+  (org-babel-load-file (expand-file-name "README.org" dotfiles-dir))
   (global-set-key (kbd "<f8>") (lambda() (interactive)(load-file "~/.emacs.d/init.el"))))

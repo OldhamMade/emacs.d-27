@@ -6,41 +6,6 @@
   This file is a literate programming document written with org-mode
   and org-mode-babel which contains the configuration I use for
   development.
-
-* TODOs
-** =which-key= integration for =ace-window=
-   I really want to see a =which-key= menu for the
-   extra commands available for =ace-window= as I constantly
-   forget them.
-
-   Unfortunately =ace-window= doesn't have it's own keymap, and
-   I don't want to create a =hydra= for this.
-
-   Current approach would be to create a custom sparse-keymap,
-   iterate through =aw-dispatch-alist= and populate the new
-   keymap from it, then add some advice to one of the =which-key=
-   functions to trigger =which-key-show-minor-mode-keymap=.
-
-   After a time-boxed attempt I have the following, but it isn't
-   working yet.
-   #+BEGIN_SRC emacs-lisp :tangle no
-    (use-package ace-window
-      :delight
-      :bind ("M-o" . ace-window)
-      :config
-        (ace-window-display-mode t)
-        (setq aw-dispatch-always t)
-        (progn
-          (setq ace-window-map (make-sparse-keymap))
-          (cl-loop for (key . value) in aw-dispatch-alist
-                   do (define-key ace-window-map key
-                       (if (car-safe value)
-                         (quote (car-safe value))
-                           (quote value))))))
-   #+END_SRC
-** =ace-mc= should use home-row keys like =avy=
-** Investigate using =ycmd= for code completion
-   https://github.com/abingham/emacs-ycmd#company-ycmd
 * Contents
 ** Startup
 *** Better GC handling
@@ -199,6 +164,10 @@
     #+BEGIN_SRC emacs-lisp :tangle yes
     (setq help-window-select t)
     #+END_SRC
+*** Enable debug mode when errors occur
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq debug-on-error t)
+    #+END_SRC
 ** Basic settings
 *** UTF-8 everywhere
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -238,14 +207,15 @@
        (use-package direnv
          :delight
          :config
-         (direnv-mode))
+         (add-hook 'emacs-startup-hook (direnv-mode)))
      #+END_SRC
 **** =exec-path-from-shell=
      #+BEGIN_SRC emacs-lisp :tangle yes
-       (use-package exec-path-from-shell
-         :delight
-         :config (when (memq window-system '(mac ns x))
-           (exec-path-from-shell-initialize)))
+     (use-package exec-path-from-shell
+       :delight
+       :config
+       (when (memq window-system '(mac ns x))
+             (exec-path-from-shell-initialize)))
      #+END_SRC
 **** Ensure system packages deps are available
      #+BEGIN_SRC emacs-lisp :tangle yes
@@ -289,45 +259,237 @@
              ("C-h v" . helpful-variable)
              ("C-h k" . helpful-key)))
     #+END_SRC
-** Modeline
-*** Ensure buffer names are unique
+** Key bindings
+*** macOS modifier keys
     #+BEGIN_SRC emacs-lisp :tangle yes
-      (defun my/load-uniquify ()
-        (require 'uniquify)
-        (setq uniquify-buffer-name-style 'forward))
-
-      (add-hook 'after-init-hook 'my/load-uniquify)
+    (setq mac-command-modifier 'alt
+          mac-option-modifier 'meta
+          mac-command-modifier 'hyper
+          mac-right-option-modifier nil)
     #+END_SRC
-*** Display total lines in file
+*** macOS standard keybindings
     #+BEGIN_SRC emacs-lisp :tangle yes
-      (defvar my-mode-line-buffer-line-count nil)
-      (make-variable-buffer-local 'my-mode-line-buffer-line-count)
-
-      (setq-default mode-line-format
-                    '("  " mode-line-modified
-                      (list 'line-number-mode "  ")
-                      (:eval (when line-number-mode
-                               (let ((str "L%l"))
-                                 (when (and (not (buffer-modified-p)) my-mode-line-buffer-line-count)
-                                   (setq str (concat str "/" my-mode-line-buffer-line-count)))
-                                 str)))
-                      "  %p"
-                      (list 'column-number-mode "  C%c")
-                      "  " mode-line-buffer-identification
-                      "  " mode-line-modes))
-
-      (defun my-mode-line-count-lines ()
-        (setq my-mode-line-buffer-line-count (int-to-string (count-lines (point-min) (point-max)))))
-
-      (add-hook 'find-file-hook 'my-mode-line-count-lines)
-      (add-hook 'after-save-hook 'my-mode-line-count-lines)
-      (add-hook 'after-revert-hook 'my-mode-line-count-lines)
-      (add-hook 'dired-after-readin-hook 'my-mode-line-count-lines)
+      (bind-keys*
+       ("H-z" . undo)
+       ("H-Z" . redo)
+       ;; moving around
+       ("<next>" . (lambda () (interactive)
+                     (condition-case nil (scroll-up)
+                       (end-of-buffer (goto-char (point-max))))))
+       ("<prior>" . (lambda () (interactive)
+                      (condition-case nil (scroll-down)
+                        (beginning-of-buffer (goto-char (point-min))))))
+       ;; Select all
+       ("H-a" . mark-whole-buffer)
+       ;; cut
+       ("H-x" . kill-region)
+       ;; copy
+       ("H-c" . kill-ring-save)
+       ;; paste
+       ("H-v" . yank)
+       ;; open
+       ("H-o" . find-file)
+       ;; save
+       ("H-s" . save-buffer)
+       ;;  close
+       ("H-w" . (lambda ()
+                  (interactive)
+                  (my-kill-buffer
+                   (current-buffer))))
+       ;; quit
+       ("H-q" . save-buffers-kill-emacs)
+       ;; minimise
+       ("H-m" . iconify-frame)
+       ;; hide
+       ("H-h" . ns-do-hide-emacs)
+       ;; jump to beginning of line
+       ("H-<left>" . beginning-of-line)
+       ;; jump to end of line
+       ("H-<right>" . end-of-line)
+       )
     #+END_SRC
-*** Add =delight= to clean-up the modeline
+*** Add =general= for more convenient key definitions
     #+BEGIN_SRC emacs-lisp :tangle yes
-    (use-package delight)
+    (use-package general)
     #+END_SRC
+*** Tools for finding free keys
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package free-keys)
+    #+END_SRC
+** Navigation
+*** =which-key=
+    =which-key= is a minor mode for Emacs that displays the key bindings
+    following your currently entered incomplete command (a prefix) in
+    a popup. For example, after enabling the minor mode if you enter
+    =C-x= and wait for the default of 1 second the minibuffer will
+    expand with all of the available key bindings that follow =C-x= (or
+    as many as space allows given your settings).
+
+    I'm using =which-key= to try and remove my reliance on custom
+    Hydras with =H-<key>= bindings.
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package which-key
+      :config
+      (setq which-key-idle-delay .4
+            which-key-side-window-location 'bottom
+            which-key-side-window-max-height 0.25)
+      (which-key-mode 1))
+    #+END_SRC
+*** =hercules=
+    =hercules.el= lets us call any group of related command
+    sequentially with no prefix keys, while showing a handy
+    =which-key=-style popup to remember the bindings for those
+    commands.
+
+    I'm using this to remove my reliance on custom Hydras from my
+    previous config.
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package hercules)
+    #+END_SRC
+*** =amx=
+    =amx= is an alternative interface for M-x in Emacs. It provides
+    several enhancements over the ordinary execute-extended-command,
+    such as prioritizing your most-used commands in the completion
+    list and showing keyboard shortcuts, and it supports several
+    completion systems for selecting commands, such as ido and ivy.
+
+    I'm trialing =amx= as an alternative to =smex=.
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package amx)
+    #+END_SRC
+*** =flx=
+    Whenever I do searches I prefer the fuzzy-matching style,
+    similar to =fzf= on the commandline. =flx= provides similar
+    functionality in emacs.
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package flx)
+    #+END_SRC
+*** Ivy/Counsel/Swiper
+    =ivy= is a generic completion mechanism for Emacs. While it operates
+    similarly to other completion schemes such as icomplete-mode, Ivy
+    aims to be more efficient, smaller, simpler, and smoother to use
+    yet highly customizable.
+
+    Counsel takes this further, providing versions of common Emacs
+    commands that are customised to make the best use of ivy.
+
+    And Swiper is an alternative to isearch that uses ivy to show an
+    overview of all matches.
+
+    I'm trialing Ivy/Counsel/Swiper as a replacement for
+    =ido= + =smex= and =isearch=.
+
+**** =ivy=
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package ivy
+       :delight
+       :init
+         (ivy-mode 1)
+       :bind
+         (("C-x C-b" . ivy-switch-buffer)
+          ("C-x b" . ivy-switch-buffer)
+          ("C-c i r" . ivy-resume))
+       :config
+         (setq ivy-use-virtual-buffers t
+               enable-recursive-minibuffers t
+               ivy-height 10
+               ivy-wrap t
+	       ivy-extra-directories nil
+               ;; disable ^ prefix
+               ivy-initial-inputs-alist nil
+               ;; enable fuzzy matches eveywhere
+	       ivy-re-builders-alist
+	         '((swiper . ivy--regex-plus)
+               (t . ivy--regex-fuzzy))  ;; fuzzy-search everywhere
+	       ivy-count-format "(%d/%d) ")
+         ;; Use C-j for immediate termination with the current value, and RET
+         ;; for continuing completion for that directory. This is the ido
+         ;; behaviour.
+         ;; TODO: Remove me, to get used to proper ivy usage
+         (general-define-key
+           :keymaps 'ivy-minibuffer-map
+             "C-j" 'ivy-immediate-done
+             "RET" 'ivy-alt-done))
+     #+END_SRC
+**** =counsel=
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package counsel
+       :delight
+       :ensure-system-package
+         ((fzf . fzf)
+          (fd . fd)
+          (ag . ag)
+          (rg . ripgrep))
+       :after (ivy)
+       :bind
+         ((:map counsel-describe-map ("M-." . counsel-find-symbol))
+          ("C-x C-f" . counsel-find-file)
+          ("C-M-f" . counsel-rg)
+          ("C-M-r" . counsel-recentf)
+          ("C-x m" . counsel-mark-ring))
+       :init
+         (require 'amx)
+         (counsel-mode)
+       :config
+         (setq counsel-find-file-ignore-regexp (regexp-opt '("./" "..")))
+         (setq counsel-fzf-cmd "fd -H | fzf -f \"%s\"")
+         (add-to-list 'ivy-re-builders-alist '(counsel-ag-function . ivy--regex))
+         (add-to-list 'ivy-re-builders-alist '(counsel-fzf-function . ivy--regex))
+         (add-to-list 'ivy-sort-functions-alist '(counsel-fzf-function . nil)))
+     #+END_SRC
+**** =swiper=
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package swiper
+       :delight)
+     #+END_SRC
+**** =ivy-rich=
+     =ivy-rich= is a more friendly interface for ivy, providing inline help
+     and other "rich" data.
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package ivy-rich
+       :after (ivy counsel)
+       :config
+       (ivy-rich-mode 1))
+     #+END_SRC
+*** Projectile
+
+    Automagically interact with "projects"; git, mercurial, bazaar, and darcs repos
+    are seen as projects by default.
+
+**** =projectile=
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package projectile
+       :defer
+       :delight
+       :custom
+       (projectile-enable-caching t)
+       :config
+       (defun get-projectile-root ()
+         "Return path `matcha-projectile' can print in heading."
+         (if (projectile-project-p)
+             (file-name-nondirectory
+              (directory-file-name
+               (file-name-directory (projectile-project-root))))
+           "Not in Project"))
+       )
+
+       (add-hook 'emacs-startup-hook (lambda () (projectile-mode +1)))
+     #+END_SRC
+**** Integrate =projectile= with =counsel=
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package counsel-projectile
+       :delight
+       :after
+         (counsel projectile)
+       :init
+         (setq projectile-switch-project-action 'counsel-fzf)
+       :config
+         (general-define-key
+           :keymaps 'projectile-mode-map
+           "C-c p" 'projectile-command-map)
+         (counsel-projectile-mode))
+     #+END_SRC
 
 ** Minibuffer
 *** Disable ability to overwrite minibuffer prompt
@@ -385,74 +547,45 @@
       (add-hook 'minibuffer-setup-hook #'my/minibuffer-setup-hook)
       (add-hook 'minibuffer-exit-hook #'my/minibuffer-exit-hook)
     #+END_SRC
-
-** Key bindings
-*** macOS modifier keys
+** Modeline
+*** Ensure buffer names are unique
     #+BEGIN_SRC emacs-lisp :tangle yes
-    (setq mac-command-modifier 'alt
-          mac-option-modifier 'meta
-          mac-command-modifier 'hyper
-          mac-right-option-modifier nil)
+      (defun my/load-uniquify ()
+        (require 'uniquify)
+        (setq uniquify-buffer-name-style 'forward))
+
+      (add-hook 'after-init-hook 'my/load-uniquify)
     #+END_SRC
-*** macOS standard keybindings
+*** Display total lines in file
     #+BEGIN_SRC emacs-lisp :tangle yes
-      (bind-keys*
-       ("H-z" . undo)
-       ("H-Z" . redo)
-       ;; moving around
-       ("<next>" . (lambda () (interactive)
-                     (condition-case nil (scroll-up)
-                       (end-of-buffer (goto-char (point-max))))))
-       ("<prior>" . (lambda () (interactive)
-                      (condition-case nil (scroll-down)
-                        (beginning-of-buffer (goto-char (point-min))))))
-       ;; Select all
-       ("H-a" . mark-whole-buffer)
-       ;; cut
-       ("H-x" . kill-region)
-       ;; copy
-       ("H-c" . kill-ring-save)
-       ;; paste
-       ("H-v" . yank)
-       ;; open
-       ("H-o" . find-file)
-       ;; save
-       ("H-s" . save-buffer)
-       ;;  close
-       ("H-w" . (lambda ()
-                  (interactive)
-                  (my-kill-buffer
-                   (current-buffer))))
-       ;; quit
-       ("H-q" . save-buffers-kill-emacs)
-       ;; minimise
-       ("H-m" . iconify-frame)
-       ;; hide
-       ("H-h" . ns-do-hide-emacs)
-       ;; jump to beginning of line
-       ("H-<left>" . beginning-of-line)
-       ;; jump to end of line
-       ("H-<right>" . end-of-line)
-       )
+      (defvar my-mode-line-buffer-line-count nil)
+      (make-variable-buffer-local 'my-mode-line-buffer-line-count)
+
+      (setq-default mode-line-format
+                    '("  " mode-line-modified
+                      (list 'line-number-mode "  ")
+                      (:eval (when line-number-mode
+                               (let ((str "L%l"))
+                                 (when (and (not (buffer-modified-p)) my-mode-line-buffer-line-count)
+                                   (setq str (concat str "/" my-mode-line-buffer-line-count)))
+                                 str)))
+                      "  %p"
+                      (list 'column-number-mode "  C%c")
+                      "  " mode-line-buffer-identification
+                      "  " mode-line-modes))
+
+      (defun my-mode-line-count-lines ()
+        (setq my-mode-line-buffer-line-count (int-to-string (count-lines (point-min) (point-max)))))
+
+      (add-hook 'find-file-hook 'my-mode-line-count-lines)
+      (add-hook 'after-save-hook 'my-mode-line-count-lines)
+      (add-hook 'after-revert-hook 'my-mode-line-count-lines)
+      (add-hook 'dired-after-readin-hook 'my-mode-line-count-lines)
     #+END_SRC
-*** Tools for finding free keys
+*** Add =delight= to clean-up the modeline
     #+BEGIN_SRC emacs-lisp :tangle yes
-    (use-package free-keys)
+    (use-package delight)
     #+END_SRC
-*** ~=tmux=-style keybindings~
-
-    Emulate the frame rotation of tmux, and my tmux settings for splitting windows,
-    so I don't get frustrated by muscle-memory.
-
-    #+BEGIN_SRC emacs-lisp :tangle no
-    (use-package rotate
-      :init (global-unset-key "\C-b")
-      :bind (("C-b SPC" . rotate-layout)
-             ("C-b -" . split-window-below)
-             ("C-b |" . split-window-right)
-             ("C-b r" . rotate-windows)))
-    #+END_SRC
-
 ** Highlighting
 *** Highlight syntax by default
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -532,12 +665,12 @@
 *** Highlight colour references, displaying the colour referenced
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package rainbow-mode
+      :defer
       :config
-      (progn
         (add-hook 'sass-mode-hook 'rainbow-mode)
         (add-hook 'css-mode-hook 'rainbow-mode)
         (add-hook 'emacs-lisp-mode-hook 'rainbow-mode)
-        ))
+        )
     #+END_SRC
 *** Highlight changes to the buffer caused by commands such as ‘undo’, ‘yank’/’yank-pop’, etc.
     #+BEGIN_SRC emacs-lisp :tangle no
@@ -545,163 +678,11 @@
       :delight
       :config (volatile-highlights-mode t))
     #+END_SRC
-** Navigation
-*** =which-key=
-    =which-key= is a minor mode for Emacs that displays the key bindings
-    following your currently entered incomplete command (a prefix) in
-    a popup. For example, after enabling the minor mode if you enter
-    =C-x= and wait for the default of 1 second the minibuffer will
-    expand with all of the available key bindings that follow =C-x= (or
-    as many as space allows given your settings).
-
-    I'm using =which-key= to try and remove my reliance on custom
-    Hydras with =H-<key>= bindings.
+*** Highlight TODO/
     #+BEGIN_SRC emacs-lisp :tangle yes
-    (use-package which-key
-      :config
-      (setq which-key-idle-delay .4
-            which-key-side-window-location 'bottom
-            which-key-side-window-max-height 0.25)
-      (which-key-mode 1))
+    (use-package hl-todo
+      :config (global-hl-todo-mode))
     #+END_SRC
-*** =amx=
-    =amx= is an alternative interface for M-x in Emacs. It provides
-    several enhancements over the ordinary execute-extended-command,
-    such as prioritizing your most-used commands in the completion
-    list and showing keyboard shortcuts, and it supports several
-    completion systems for selecting commands, such as ido and ivy.
-
-    I'm trialing =amx= as an alternative to =smex=.
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (use-package amx)
-    #+END_SRC
-*** =flx=
-    Whenever I do searches I prefer the fuzzy-matching style,
-    similar to =fzf= on the commandline. =flx= provides similar
-    functionality in emacs.
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (use-package flx)
-    #+END_SRC
-*** Ivy/Counsel/Swiper
-    =ivy= is a generic completion mechanism for Emacs. While it operates
-    similarly to other completion schemes such as icomplete-mode, Ivy
-    aims to be more efficient, smaller, simpler, and smoother to use
-    yet highly customizable.
-
-    Counsel takes this further, providing versions of common Emacs
-    commands that are customised to make the best use of ivy.
-
-    And Swiper is an alternative to isearch that uses ivy to show an
-    overview of all matches.
-
-    I'm trialing Ivy/Counsel/Swiper as a replacement for
-    =ido= + =smex= and =isearch=.
-
-**** =ivy=
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (use-package ivy
-       :delight
-       :init
-         (ivy-mode 1)
-       :bind
-         (("C-x C-b" . ivy-switch-buffer)
-          ("C-x b" . ivy-switch-buffer)
-          ("C-c i r" . ivy-resume))
-       :config
-         (setq ivy-use-virtual-buffers t
-               enable-recursive-minibuffers t
-               ivy-height 10
-               ivy-wrap t
-	       ivy-extra-directories nil
-               ;; disable ^ prefix
-               ivy-initial-inputs-alist nil
-               ;; enable fuzzy matches eveywhere
-	       ivy-re-builders-alist
-	         '((swiper . ivy--regex-plus)
-               (t . ivy--regex-fuzzy))  ;; fuzzy-search everywhere
-	       ivy-count-format "(%d/%d) ")
-         ;; Use C-j for immediate termination with the current value, and RET
-         ;; for continuing completion for that directory. This is the ido
-         ;; behaviour.
-         ;; TODO: Remove me, to get used to proper ivy usage
-         (define-key ivy-minibuffer-map (kbd "C-j") #'ivy-immediate-done)
-         (define-key ivy-minibuffer-map (kbd "RET") #'ivy-alt-done))
-     #+END_SRC
-**** =counsel=
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (use-package counsel
-       :delight
-       :ensure-system-package
-         ((fzf . fzf)
-          (fd . fd)
-          (ag . ag)
-          (rg . ripgrep))
-       :after (ivy)
-       :bind
-         ((:map counsel-describe-map ("M-." . counsel-find-symbol))
-          ("C-x C-f" . counsel-find-file)
-          ("C-M-f" . counsel-rg)
-          ("C-M-r" . counsel-recentf)
-          ("C-x m" . counsel-mark-ring))
-       :init
-         (require 'amx)
-         (counsel-mode)
-       :config
-         (setq counsel-find-file-ignore-regexp (regexp-opt '("./" "..")))
-         (setq counsel-fzf-cmd "fd -H | fzf -f \"%s\"")
-         (add-to-list 'ivy-re-builders-alist '(counsel-ag-function . ivy--regex))
-         (add-to-list 'ivy-re-builders-alist '(counsel-fzf-function . ivy--regex))
-         (add-to-list 'ivy-sort-functions-alist '(counsel-fzf-function . nil)))
-     #+END_SRC
-**** =swiper=
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (use-package swiper
-       :delight)
-     #+END_SRC
-**** =ivy-rich=
-     =ivy-rich= is a more friendly interface for ivy, providing inline help
-     and other "rich" data.
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (use-package ivy-rich
-       :after (ivy counsel)
-       :config
-       (ivy-rich-mode 1))
-     #+END_SRC
-*** Projectile
-
-    Automagically interact with "projects"; git, mercurial, bazaar, and darcs repos
-    are seen as projects by default.
-
-**** =projectile=
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (use-package projectile
-       :delight
-       :custom
-       (projectile-enable-caching t)
-       :config
-       (projectile-mode +1)
-       (defun get-projectile-root ()
-         "Return path `matcha-projectile' can print in heading."
-         (if (projectile-project-p)
-             (file-name-nondirectory
-              (directory-file-name
-               (file-name-directory (projectile-project-root))))
-           "Not in Project"))
-       )
-     #+END_SRC
-**** Integrate =projectile= with =counsel=
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (use-package counsel-projectile
-       :delight
-       :after
-         (counsel projectile)
-       :init
-         (setq projectile-switch-project-action 'counsel-fzf)
-       :config
-         (define-key projectile-mode-map (kbd "C-c p") 'projectile-command-map)
-         (counsel-projectile-mode))
-     #+END_SRC
-
 ** Files
 *** Enable auto-save of files as they are edited, so that no changes are lost
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -739,7 +720,7 @@
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package shrink-whitespace
       :delight
-      :config (global-set-key (kbd "<C-M-backspace>") 'shrink-whitespace))
+      :config (general-define-key (kbd "<C-M-backspace>") 'shrink-whitespace))
     #+END_SRC
 
 *** Copy Filename to Clipboard
@@ -848,7 +829,7 @@
           (set-buffer buffer)
           (unless (eq current-buf buffer)
             (kill-buffer buffer)))))
-    (global-set-key (kbd "C-x K") 'my/kill-all-buffers-except-current)
+    (general-define-key (kbd "C-x K") 'my/kill-all-buffers-except-current)
     #+END_SRC
 
 *** Switching buffers
@@ -884,57 +865,53 @@
 *** Custom Jump menu
     I like to group some jump commands into a single menu,
     to make them easy to remember.
-**** Create a custom prefix key
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (define-prefix-command 'my-jump-map)
-     (global-set-key (kbd "C-\\") 'my-jump-map)
-     #+END_SRC
-**** Moving to top/bottom of buffer
-     I have a habit of jumping to the top of the buffer before
-     initiating a search, so I don't have to loop when I know what I
-     need is towards the top of the buffer.
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (define-key my-jump-map "[" 'beginning-of-buffer)
-     (define-key my-jump-map "]" 'end-of-buffer)
-     #+END_SRC
-**** Goto a specific line
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (define-key my-jump-map "g" 'goto-line)
-     #+END_SRC
-**** Cycle through historic points
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (define-key my-jump-map "'" '("previous points" . pop-global-mark))
-     #+END_SRC
-*** DWIM in relation to indentation
-    =C-a= normally moves the cursor to the beginning of the line
-    unconditionally. This version is more useful, as it moves to the
-    first non-whitespace character if we're already at the beginning of
-    the line. Repeated use of `C-a' toggles between these two positions.
 
     #+BEGIN_SRC emacs-lisp :tangle yes
-    (defun my/beginning-of-line-dwim ()
-      "Toggles between moving point to the first non-whitespace character,
-      and the start of the line."
-      (interactive)
-      (let ((start-position (point)))
-        (move-beginning-of-line nil)
-        (when (= (point) start-position)
-          (back-to-indentation))))
+    (defconst my-leader "C-;")
 
-    (bind-keys
-      ("C-a" . my/beginning-of-line-dwim)
-      ("H-<left>" . my/beginning-of-line-dwim))
+    (general-create-definer my-leader-def
+      ;; :prefix my-leader
+      ;; or without a variable
+      :prefix "C-;")
+
+    ;; ** Global Keybindings
+    (my-leader-def
+      "[" 'beginning-of-buffer
+      "]" 'end-of-buffer
+      "g" 'goto-line
+      "'" '("previous points" . pop-global-mark)
+      "." '("previous M-. tag" . pop-tag-mark))
+    #+END_SRC
+*** Move Where I Mean
+    =C-a= and =C-e= normally moves the cursor to the beginning/end of
+    the line unconditionally.
+
+    =mwim= is more useful, as it moves to the first non-whitespace
+    character if we're already at the beginning of the line. Repeated
+    use of =C-a= toggles between these two positions.
+
+    =C-e= will toggle to the end of the line ignoring comments, or to
+    the true end of the line.
+
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package mwim
+      :delight
+      :bind (("C-a" . mwim-beginning)
+             ("C-e" . mwim-end)
+             ("H-<left>" . mwim-beginning)
+             ("H-<right>" . mwim-end)))
     #+END_SRC
 *** Jumping around with =avy= and friends
 **** =avy=
      #+BEGIN_SRC emacs-lisp :tangle yes
      (use-package avy
        :delight
-       :bind (:map my-jump-map
-              (("w" . avy-goto-word-1)
-               ("c" . avy-goto-char-timer)
-               ("l" . avy-goto-line)))
        :config (setq avy-all-windows nil))
+
+     (my-leader-def
+      "w" 'avy-goto-word-1
+      "c" 'avy-goto-char-timer
+      "l" 'avy-goto-line)
      #+END_SRC
 *** Jump back to the last edit
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -976,12 +953,16 @@
                ("M-M a" . mc/mark-all-like-this)
                ("M-M n" . mc/mark-next-like-this)
                ("M-M p" . mc/mark-previous-like-this))
-        :config (define-key mc/keymap (kbd "<return>") nil))
+        :config
+        (general-define-key
+          :keymaps 'mc/keymap
+          "<return>" nil))
       #+END_SRC
-***** =ace-mc=
+***** FIXME =ace-mc=
       =ace-mc= makes it really easy to add and remove multiple cursors
       using ace jump mode.
-      #+BEGIN_SRC emacs-lisp :tangle yes
+
+      #+BEGIN_SRC emacs-lisp :tangle no
       (use-package ace-mc
         :after (multiple-cursors)
         :delight
@@ -1064,7 +1045,7 @@
 *** Whitespace
 **** Delete trailing whitespace
      #+BEGIN_SRC emacs-lisp :tangle yes
-     (global-set-key (kbd "C-c DEL") 'delete-trailing-whitespace)
+     (general-define-key (kbd "C-c DEL") 'delete-trailing-whitespace)
      #+END_SRC
 **** Allow inserting into whitespace-separated blocks
      #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1078,9 +1059,9 @@
     #+END_SRC
 *** Up/Down-case DWIM
     #+BEGIN_SRC emacs-lisp :tangle yes
-    (global-set-key (kbd "M-c") 'capitalize-dwim)
-    (global-set-key (kbd "M-u") 'upcase-dwim)
-    (global-set-key (kbd "M-l") 'downcase-dwim)
+    (general-define-key (kbd "M-c") 'capitalize-dwim)
+    (general-define-key (kbd "M-u") 'upcase-dwim)
+    (general-define-key (kbd "M-l") 'downcase-dwim)
     #+END_SRC
 ** Spelling
 *** =flyspell-correct-ivy=
@@ -1098,7 +1079,8 @@
     Jump to and correct spelling errors using avy and flyspell.
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package ace-flyspell
-      :config (ace-flyspell-setup))
+      :defer
+      :config (add-hook 'after-init-hook 'ace-flyspell-setup))
     #+END_SRC
 ** Search/replace
 *** Add =deadgrep= for searching (faster than =grep=)
@@ -1131,15 +1113,16 @@
     I have this configured to skip isearch and go from avy to swiper.
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package ace-isearch
+      :defer
       :delight
-      :init
-        (global-ace-isearch-mode +1)
       :config
         (custom-set-variables
           '(ace-isearch-input-length 2)
           '(ace-isearch-jump-delay 1)
           '(ace-isearch-function 'avy-goto-char)
           '(ace-isearch-use-jump 'printing-char)))
+
+    (add-hook 'emacs-startup-hook (lambda () (global-ace-isearch-mode +1)))
     #+END_SRC
 ** Windows
 *** Use =ace-window= to move around
@@ -1149,14 +1132,9 @@
       :bind ("M-o" . ace-window)
       :config
         (ace-window-display-mode t)
-        (setq aw-dispatch-always t))
+        (setq aw-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l)
+              aw-dispatch-always t))
     #+END_SRC
-**** Show available commands
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (defadvice ace-window (before other-window-now activate)
-       (which-key-show-keymap )
-       (when buffer-file-name (save-buffer)))
-     #+END_SRC
 *** Allow "zooming" a buffer to full-screen
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package zoom-window
@@ -1170,12 +1148,17 @@
       :config (persp-mode))
 
     (use-package persp-projectile
-      :config
-      (define-key perspective-map (kbd "x") 'projectile-persp-switch-project)
-      ;; override projectile-switch-project since
-      ;; we always want to be in a perspective
-      (define-key projectile-command-map "p" 'projectile-persp-switch-project)
+      :defer)
+
+    (general-define-key
+      :keymaps 'perspective-map
+      "x" 'projectile-persp-switch-project
       )
+    ;; override projectile-switch-project since
+    ;; we always want to be in a perspective
+    (general-define-key
+      :keymaps 'projectile-command-map
+      "p" 'projectile-persp-switch-project)
     #+END_SRC
 
 *** Recover window split using =C-c <left>= with winner-mode
@@ -1208,7 +1191,7 @@
 
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package browse-at-remote
-      :config (global-set-key (kbd "C-c g g") 'browse-at-remote))
+      :config (general-define-key (kbd "C-c g g") 'browse-at-remote))
     #+END_SRC
 *** Use =magit= and =forge= with git repositories
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1400,6 +1383,7 @@
 *** Flycheck
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package flycheck
+      :defer
       :delight " ✓ "
       :config (add-hook 'after-init-hook 'global-flycheck-mode))
     #+END_SRC
@@ -1408,6 +1392,7 @@
      according to the Flycheck state of the current buffer.
      #+BEGIN_SRC emacs-lisp :tangle yes
      (use-package flycheck-color-mode-line
+       :defer
        :after (flycheck)
        :config
          (add-hook 'flycheck-mode-hook 'flycheck-color-mode-line-mode))
@@ -1428,12 +1413,14 @@
      #+END_SRC
 **** Add =ruby-end= to support the =end= keyword
      #+BEGIN_SRC emacs-lisp :tangle yes
-     (use-package ruby-end)
+     (use-package ruby-end
+       :defer)
      #+END_SRC
 **** Add Alchemist for elixir programming.
 
      #+BEGIN_SRC emacs-lisp :tangle yes
      (use-package alchemist
+       :defer
        :delight
        (alchemist-mode "[al]")
        (alchemist-hex-mode "[hex]")
@@ -1442,6 +1429,27 @@
        (setq alchemist-compile-project-when-needed t)
        (setq alchemist-hooks-compile-on-save t)
        )
+
+     (general-def
+       :prefix-map 'my-alchemist-test-map
+       "t" #'alchemist-mix-test
+       "s" #'alchemist-mix-test-stale
+       "b" #'alchemist-mix-test-this-buffer
+       "p" #'alchemist-mix-test-at-point
+       "f" #'alchemist-mix-test-file
+       "." #'alchemist-test-jump-to-next-test
+       "," #'alchemist-test-jump-to-previous-test
+       "r" #'alchemist-mix-rerun-last-test
+       )
+
+     (hercules-def
+       :toggle-funs #'my-alchemist-test-mode
+       :keymap 'my-alchemist-test-map
+       :transient t
+       :flatten t)
+
+     (general-define-key
+       "C-c a t" 'my-alchemist-test-mode)
 
      (defun elixir-mode-prettify-symbols-hook ()
        (setq-local
@@ -1554,81 +1562,90 @@
 *** Nim
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package nim-mode
+      :defer
       :mode ("\\.nim\\'" . nim-mode))
     #+END_SRC
 *** Pony
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package ponylang-mode
+      :defer
       :mode ("\\.pony\\'" . ponylang-mode)
       :config (setq tab-width 2))
     #+END_SRC
 
 **** Add flycheck mode
      #+BEGIN_SRC emacs-lisp :tangle yes
-     (use-package flycheck-pony)
+     (use-package flycheck-pony
+       :defer)
      #+END_SRC
 
 
 *** HTML et al
     #+BEGIN_SRC emacs-lisp :tangle yes
-      (use-package web-mode
-        :config
-        (add-to-list 'auto-mode-alist '("\\.html?\\'" . web-mode))
-        (add-to-list 'auto-mode-alist '("\\.mustache\\'" . web-mode))
-        ;(add-to-list 'auto-mode-alist '("\\.jsx\\'" . web-mode))
-        (add-to-list 'auto-mode-alist '("\\.ecr\\'" . web-mode))
-        (add-to-list 'auto-mode-alist '("\\.erb\\'" . web-mode))
+    (use-package web-mode
+      :defer
+      :config
+      ;; use eslint with web-mode for jsx files
+      (with-eval-after-load 'flycheck
+        (flycheck-add-mode 'javascript-eslint 'web-mode))
 
-        ;; use eslint with web-mode for jsx files
-        (with-eval-after-load 'flycheck
-          (flycheck-add-mode 'javascript-eslint 'web-mode))
+      ;; adjust indents for web-mode to 2 spaces
+      (defun my-web-mode-hook ()
+        "Hooks for Web mode. Adjust indents"
+        ;;; http://web-mode.org/
+        (setq web-mode-markup-indent-offset 2)
+        (setq web-mode-css-indent-offset 2)
+        (setq web-mode-code-indent-offset 2))
 
-        ;; adjust indents for web-mode to 2 spaces
-        (defun my-web-mode-hook ()
-          "Hooks for Web mode. Adjust indents"
-          ;;; http://web-mode.org/
-          (setq web-mode-markup-indent-offset 2)
-          (setq web-mode-css-indent-offset 2)
-          (setq web-mode-code-indent-offset 2))
+      (add-hook 'web-mode-hook  'my-web-mode-hook))
 
-        (add-hook 'web-mode-hook  'my-web-mode-hook))
+    (add-to-list 'auto-mode-alist '("\\.html?\\'" . web-mode))
+    (add-to-list 'auto-mode-alist '("\\.mustache\\'" . web-mode))
+    ;(add-to-list 'auto-mode-alist '("\\.jsx\\'" . web-mode))
+    (add-to-list 'auto-mode-alist '("\\.ecr\\'" . web-mode))
+    (add-to-list 'auto-mode-alist '("\\.erb\\'" . web-mode))
     #+END_SRC
 *** JavaScript
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package js2-mode
+      :defer
       :config
       (progn
         (setq-default js-indent-level 4)
         (setq-default js2-basic-offset 4)
         (setq tab-width 4)
         (setq js-switch-indent-offset 4)
-
-        (add-to-list 'auto-mode-alist '("\\.js\\'" . js2-mode))
-        ;; Better imenu
-        (add-hook 'js2-mode-hook #'js2-imenu-extras-mode)
-        (add-hook 'js2-mode-hook 'company-mode)
         ))
+
+    (add-to-list 'auto-mode-alist '("\\.js\\'" . js2-mode))
+    (add-hook 'js2-mode-hook #'js2-imenu-extras-mode)
+    (add-hook 'js2-mode-hook 'company-mode)
     #+END_SRC
 *** Sass/Scss
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package sass-mode
       :delight "sass"
+      :defer
       :mode ("\\.s(c|a)ss\\'" . sass-mode))
     #+END_SRC
 *** Yaml
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package yaml-mode
+      :defer
       :mode ("\\.ya?ml\\'" . yaml-mode))
     #+END_SRC
 *** Markdown
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package markdown-mode
       :delight "md"
+      :defer
       :mode ("\\.md\\'" . markdown-mode))
     #+END_SRC
 *** Docker
     #+BEGIN_SRC emacs-lisp :tangle yes
-    (use-package dockerfile-mode)
+    (use-package dockerfile-mode
+      :defer
+      :mode ("\\Dockerfile\\'" . dockerfile-mode))
     #+END_SRC
 *** RAML
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1638,6 +1655,11 @@
       :mode "\\.raml\\'")
     #+END_SRC
 
+*** Gherkin/FDD
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package feature-mode
+      :mode ("\\.feature$" . feature-mode))
+    #+END_SRC
 ** Terminal
 *** Multi-term
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1662,7 +1684,95 @@
 *** Finally, display how long it took to start up
     #+BEGIN_SRC emacs-lisp :tangle yes
     (add-hook 'emacs-startup-hook
-       (lambda ()
-         (interactive)
-         (message "Emacs startup time: %d seconds." (emacs-init-time))))
+      (lambda ()
+        (message "Emacs ready in %s with %d garbage collections."
+          (format "%.2f seconds"
+            (float-time
+              (time-subtract after-init-time before-init-time)))
+          gcs-done)))
     #+END_SRC
+* TODOs
+** Display menu for =ace-window=
+   I really want to see a =which-key= menu for the
+   extra commands available for =ace-window= as I constantly
+   forget them.
+
+   Unfortunately =ace-window= doesn't have it's own keymap, and
+   I don't want to create a =hydra= for this.
+*** Custom keymap
+   Current approach would be to create a custom sparse-keymap,
+   iterate through =aw-dispatch-alist= and populate the new
+   keymap from it, then add some advice to one of the =which-key=
+   functions to trigger =which-key-show-minor-mode-keymap=.
+
+   After a time-boxed attempt I have the following, but it isn't
+   working yet.
+   #+BEGIN_SRC emacs-lisp :tangle no
+    (use-package ace-window
+      :delight
+      :bind ("M-o" . ace-window)
+      :config
+        (ace-window-display-mode t)
+        (setq aw-dispatch-always t)
+        (progn
+          (setq ace-window-map (make-sparse-keymap))
+          (cl-loop for (key . value) in aw-dispatch-alist
+                   do (define-key ace-window-map key
+                       (if (car-safe value)
+                         (quote (car-safe value))
+                           (quote value))))))
+   #+END_SRC
+*** Show available commands using hercules
+    Another alternative, but the menu triggers /after/
+    =ace-window= has completed, not /during/.
+    #+BEGIN_SRC emacs-lisp :tangle no
+    (general-def
+      :prefix-map 'my-ace-window-map
+      "x" #'aw-delete-window
+      "m" #'aw-swap-window
+      "M" #'aw-move-window
+      "c" #'aw-copy-window
+      "j" #'aw-switch-buffer-in-window
+      "n" #'aw-flip-window
+      "u" #'aw-switch-buffer-other-window
+      "e" #'aw-execute-command-other-window
+      "F" #'aw-split-window-fair
+      "v" #'aw-split-window-vert
+      "b" #'aw-split-window-horz
+      "o" #'delete-other-windows
+      "T" #'aw-transpose-frame
+      "?" #'aw-show-dispatch-help
+      )
+
+    (hercules-def
+      :toggle-funs #'ace-window
+      :keymap 'my-ace-window-map
+      :transient t
+      :flatten t)
+    #+END_SRC
+*** Further reading
+**** https://github.com/whitmo/whit-dot-emacs/blob/28f14007a3df9dda092faa6bfeee18d91754a485/lisp/init-ace.el
+**** https://github.com/pdcawley/dotemacs/blob/cf6f706fe1f0d59fbf5372ceadb2542b9e0ccf49/config.org#L1546
+** =ace-mc= should use home-row keys like =avy=
+** Investigate using =ycmd= for code completion
+   https://github.com/abingham/emacs-ycmd#company-ycmd
+** Add =no-littering=
+   https://github.com/emacscollective/no-littering
+** Winner mode
+*** https://github.com/shawn271828/dotemacs/blob/6f4e47558e618ff1fcc06c5c88a77121f48a5da4/lisp/init-window.el#L33
+*** https://gitlab.com/jjzmajic/hercules.el
+** Better alchemist menu
+*** https://github.com/tonini/alchemist.el/blob/6f99367511ae209f8fe2c990779764bbb4ccb6ed/alchemist.el#L141
+** Move from projectile to something lighter
+   I don't use 90% of projectile functionality, and can't imagine I
+   ever would. Primarily I just want to have a perspective per project,
+   and limit searches to that perspective.
+
+   Maybe moving to =project.el= would be better.
+
+   https://old.reddit.com/r/emacs/comments/b0jzy4/emacscast_8_writing_in_emacs_and_org_mode_part_1/eiiywwm/
+   https://www.reddit.com/r/emacs/comments/88v344/workspace_with_isolated_buffers_eyebrowseperspmode/
+** FIXME:
+*** multiple cursors
+**** https://github.com/dhodges/dotfiles/blob/f808e22a2e47133a0fab549db63241a516cf523c/.emacs.d/dh-lisp/dh-packages.el#L276
+*** smart-region should load for all modes
