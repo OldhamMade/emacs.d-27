@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t; -*-
 ;;; init.el --- custom init file
 ;;;
 ;;; Commentary:
@@ -17,7 +18,9 @@
 ;; Disable writing package settings to init.el
 (defun package--save-selected-packages (&rest opt) nil)
 
-(setq package-enable-at-startup nil)
+(setq package-enable-at-startup nil ; don't auto-initialize!
+      ;; don't add that `custom-set-variables' block to my init.el!
+      package--init-file-ensured t)
 (setq package-archives '(("gnu" . "https://elpa.gnu.org/packages/")
                          ("melpa-stable" . "https://stable.melpa.org/packages/")
                          ("melpa" . "https://melpa.org/packages/")
@@ -39,10 +42,14 @@
       (eval-print-last-sexp)))
   (load bootstrap-file nil 'nomessage))
 
+;; straight.el tuning
 (straight-use-package 'use-package)
 (setq straight-use-package-by-default 1
+      straight-cache-autoloads t
+      straight-enable-use-package-integration t
       straight-check-for-modifications '(check-on-save find-when-checking))
 
+;; tangle the README.org into a config file
 (let ((file-name-handler-alist nil))
   (require 'ob-tangle)
   (setq dotfiles-dir (file-name-directory
