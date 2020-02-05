@@ -7,24 +7,59 @@
   and org-mode-babel which contains the configuration I use for
   development.
 * Contents
-** Startup
+** =early-init.el=
+   The following configuration will be moved to =early-init.el= for
+   performance reasons when emacs 27 is available from
+   =railwaycat/homebrew-emacs=. Until then, it will be triggered as
+   early as possible.
 *** Use lexical binding
     This buys a small improvement in performance, but every little bit
     helps.
     #+BEGIN_SRC emacs-lisp :tangle yes
     ;; -*- lexical-binding: t; -*-
     #+END_SRC
-*** Better GC handling
-**** Increase startup threshold
-     Emacs will run garbage collection after `gc-cons-threshold' bytes of
-     consing. The default value is 800,000 bytes, or ~ 0.7 MiB. By
-     increasing to maximum we reduce the number of pauses due to
-     garbage collection during setup.
+*** Increase startup threshold
+    Emacs will run garbage collection after `gc-cons-threshold' bytes of
+    consing. The default value is 800,000 bytes, or ~ 0.7 MiB. By
+    increasing to maximum we reduce the number of pauses due to
+    garbage collection during setup.
 
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (setq gc-cons-threshold most-positive-fixnum ; 2^61 bytes
-           gc-cons-percentage 0.6)
-     #+END_SRC
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq gc-cons-threshold most-positive-fixnum ; 2^61 bytes
+          gc-cons-percentage 0.6)
+    #+END_SRC
+*** Hide the toolbar
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (ignore-errors
+      (tool-bar-mode -1))
+    #+END_SRC
+*** Hide scrollbars
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (ignore-errors
+      (scroll-bar-mode -1))
+    #+END_SRC
+*** Disable the cursor blink
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (blink-cursor-mode -1)
+    #+END_SRC
+*** Disable visual bell
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq visible-bell nil)
+    #+END_SRC
+*** Disable instructions in the scratch buffer
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq initial-scratch-message nil)
+    #+END_SRC
+*** Reduce the message log to the last 512 entries
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq message-log-max 512)
+    #+END_SRC
+*** Enable debug mode when errors occur
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq debug-on-error t)
+    #+END_SRC
+** Startup
+*** Better GC handling
 **** Define a sane value for general use
      #+BEGIN_SRC emacs-lisp :tangle yes
      (defvar my--gc-cons-threshold 16777216)
@@ -98,39 +133,13 @@
               (insert (current-time-microseconds))))))
     #+END_SRC
 
-*** Disable the cursor blink
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (blink-cursor-mode -1)
-    #+END_SRC
 *** Disable compiler warnings
     #+BEGIN_SRC emacs-lisp :tangle yes
     (setq byte-compile-warnings nil)
     #+END_SRC
-*** Hide the toolbar
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (ignore-errors 
-      (tool-bar-mode -1))
-    #+END_SRC
-*** Hide scrollbars
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (when (fboundp 'scroll-bar-mode)
-      (scroll-bar-mode -1))
-    #+END_SRC
-*** Disable visual bell
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (setq visible-bell nil)
-    #+END_SRC
-*** Disable instructions in the scratch buffer
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (setq initial-scratch-message nil)
-    #+END_SRC
 *** Allow answering 'Yes or No' prompts with Y or N
     #+BEGIN_SRC emacs-lisp :tangle yes
     (fset 'yes-or-no-p 'y-or-n-p)
-    #+END_SRC
-*** Reduce the message log to the last 512 entries
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (setq message-log-max 512)
     #+END_SRC
 *** Confirm exiting emacs
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -170,10 +179,6 @@
     #+BEGIN_SRC emacs-lisp :tangle yes
     (setq help-window-select t)
     #+END_SRC
-*** Enable debug mode when errors occur
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (setq debug-on-error t)
-    #+END_SRC
 **** And disable them again once we've loaded
      #+BEGIN_SRC emacs-lisp :tangle yes
      (add-hook 'emacs-startup-hook
@@ -194,7 +199,7 @@
 *** Environment
 **** Flag that emacs is active (for use with tmux)
      #+BEGIN_SRC emacs-lisp :tangle yes
-       (setenv "INSIDE_EMACS" "1")
+     (setenv "INSIDE_EMACS" "1")
      #+END_SRC
 **** Pick up =PATH= from =zsh=
      #+BEGIN_SRC emacs-lisp :tangle yes
@@ -241,6 +246,7 @@
       :straight (leiptr :type git :host github :repo "OldhamMade/leiptr-theme"))
     #+END_SRC
 *** Font: SanFranciscoMono
+    This will be set in =early-init.el=, but repeated here for now.
     #+BEGIN_SRC emacs-lisp :tangle yes
     (set-face-attribute 'default nil :font "SFMono Nerd Font:pixelsize=10:weight=normal:slant=normal:width=normal:spacing=100:scalable=true:hinting=true")
     #+END_SRC
@@ -505,12 +511,21 @@
        :after
          (counsel projectile)
        :init
-         (setq projectile-switch-project-action 'counsel-fzf)
+         (setq projectile-completion-system 'ivy
+               projectile-switch-project-action 'counsel-projectile-find-file)
        :config
          (general-define-key
            :keymaps 'projectile-mode-map
            "C-c p" 'projectile-command-map)
          (counsel-projectile-mode))
+     #+END_SRC
+**** Custom keybindings
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (general-def
+       :keymaps 'projectile-command-map
+       "A" 'projectile-add-known-project
+       "K" 'projectile-remove-known-project
+       "DEL" 'projectile-cleanup-known-projects)
      #+END_SRC
 
 ** Minibuffer
@@ -528,7 +543,7 @@
     commands that require the minibuffer.
 
     #+BEGIN_SRC emacs-lisp :tangle yes
-      (setq enable-recursive-minibuffers t)
+    (setq enable-recursive-minibuffers t)
     #+END_SRC
 
     With this setting enabled, it's easy to lose track of whether we're
@@ -536,7 +551,7 @@
     the minibuffer to avoid confusion.
 
     #+BEGIN_SRC emacs-lisp :tangle yes
-      (minibuffer-depth-indicate-mode 1)
+    (minibuffer-depth-indicate-mode 1)
     #+END_SRC
 
 *** Minibuffer "shortcuts"
@@ -545,7 +560,7 @@
     (root) and ~ will mean $HOME regardless of preceding text
 
     #+BEGIN_SRC emacs-lisp :tangle yes
-      (setq file-name-shadow-tty-properties '(invisible t))
+    (setq file-name-shadow-tty-properties '(invisible t))
     #+END_SRC
 
     Dim the part of the path that will be replaced.
@@ -693,6 +708,17 @@
     #+BEGIN_SRC emacs-lisp :tangle yes
     (add-hook 'emacs-startup-hook
       (lambda () (global-prettify-symbols-mode +1)))
+    #+END_SRC
+*** Change cursor dynamically, depending on the context
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package cursor-chg
+      :init
+        (setq curchg-default-cursor-type 'box
+              curchg-idle-cursor-type 'hollow
+              curchg-default-cursor-color "white"
+              curchg-input-method-cursor-color "red")
+      :config
+        (add-hook 'emacs-startup-hook (lambda () (change-cursor-mode 1))))
     #+END_SRC
 ** Files
 *** Enable auto-save of files as they are edited, so that no changes are lost
@@ -917,13 +943,42 @@
         (:keymaps 'goto-map
          "-" 'goto-last-change))
     #+END_SRC
+*** Quickly jump between other symbols found at point
+    Smart Scan will try to infer the symbol your point is on and let
+    you jump to other, identical, symbols elsewhere in your current
+    buffer with a single key stroke.
+
+    Use =M-n= and =M-p= move between symbols, and =M-'= to replace all
+    symbols in the buffer matching the one under point.
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package smartscan
+      :hook (emacs-startup . (lambda () (smartscan-mode 1))))
+    #+END_SRC
 ** Editing
 *** Use [[http://www.dr-qubit.org/emacs.php#undo-tree][=undo-tree]] in place of standard undo/redo
-    #+BEGIN_SRC emacs-lisp :tangle yes
+    #+BEGIN_SRC emacs-lisp :tangle no
     (use-package undo-tree
       :delight
       :defer
       :config (add-hook 'emacs-startup-hook 'global-undo-tree-mode))
+    #+END_SRC
+*** Add =undo-fu= for better undo behaviour
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package undo-fu-session
+      :straight (undo-fu-session :type git :host gitlab :repo "ideasman42/emacs-undo-fu-session")
+      :general
+        ("H-z" #'undo-fu-only-undo)
+        ("H-S-z" #'undo-fu-only-redo)
+      :init
+        (setq undo-fu-session-directory (expand-file-name "~/Dropbox/.emacs.persist/.undohist")
+              undo-fu-session-incompatible-files
+              '("COMMIT_EDITMSG"
+                "NOTES_EDITMSG"
+                "MERGE_MSG"
+                "TAG_EDITMSG"
+                "\\.gpg\\'"
+                "/tmp"
+                file-remote-p)))
     #+END_SRC
 *** Unfill
     Unfill adds the inverse of fill-paragraph/-region.
@@ -999,7 +1054,7 @@
      #+BEGIN_SRC emacs-lisp :tangle yes
      (use-package smart-region
        :after (multiple-cursors)
-       :hook (after-init . smart-region-on))
+       :hook (emacs-startup . smart-region-on))
      #+END_SRC
 **** Remember cursor position when reopening files
      #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1112,10 +1167,9 @@
       :config (add-hook 'emacs-startup-hook 'ace-flyspell-setup))
     #+END_SRC
 ** Search/replace
-*** Add general key for search/replace
+*** Highlight matches in query-replace mode
     #+BEGIN_SRC emacs-lisp :tangle yes
-    (general-define-key
-      "C-c r" 'replace-string)
+    (setq query-replace-highlight t)
     #+END_SRC
 *** Add =deadgrep= for searching (faster than =grep=)
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1185,6 +1239,20 @@
 
     (add-hook 'emacs-startup-hook (lambda () (global-ace-isearch-mode +1)))
     #+END_SRC
+*** Visual regexp
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package visual-regexp
+      :delight
+      :defer
+      :after (multiple-cursors)
+      :general
+        ("C-c r" #'vr/replace)
+        ("C-c q" #'vr/query-replace)
+      :config
+        (general-define-key
+          :keymaps 'my/mc-map
+          "q" #'vr/mc-mark))
+    #+END_SRC
 ** Windows
 *** Use =ace-window= to move around
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1205,13 +1273,11 @@
     #+END_SRC
 *** Perspectives (workspaces)
     #+BEGIN_SRC emacs-lisp :tangle yes
-    (use-package perspective
-      :defer
-      :config (add-hook 'emacs-startup-hook 'persp-mode))
-
     (use-package persp-projectile
       :defer
-      :after (persp-mode projectile)
+      :init (use-package perspective)
+      :after (projectile)
+      :hook (emacs-startup . persp-mode)
       :general
         (:keymaps 'perspective-map
          "x" 'projectile-persp-switch-project)
@@ -1348,6 +1414,12 @@
      (add-to-list 'org-structure-template-alist
              '("S" "#+BEGIN_SRC emacs-lisp :tangle yes\n?\n#+END_SRC"))
      #+END_SRC
+**** Org-Capture
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (general-define-key
+       "C-c o" 'org-capture)
+     (setq org-default-notes-file "~/Dropbox/notes.org")
+     #+END_SRC
 *** Packages
 **** Replace Org's bullets with something less noisy
      #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1479,8 +1551,7 @@
      (use-package ruby-end
        :defer)
      #+END_SRC
-**** Add Alchemist for elixir programming.
-
+**** Add Alchemist
      #+BEGIN_SRC emacs-lisp :tangle yes
      (use-package alchemist
        :defer
@@ -1492,28 +1563,93 @@
        (setq alchemist-compile-project-when-needed t)
        (setq alchemist-hooks-compile-on-save t)
        )
+     #+END_SRC
+**** Add =inf-elixir=
+     Pop open and interact with iEX
 
-     (general-def
-       :prefix-map 'my-alchemist-test-map
-       "t" #'alchemist-mix-test
-       "s" #'alchemist-mix-test-stale
-       "b" #'alchemist-mix-test-this-buffer
-       "p" #'alchemist-mix-test-at-point
-       "f" #'alchemist-mix-test-file
-       "." #'alchemist-test-jump-to-next-test
-       "," #'alchemist-test-jump-to-previous-test
-       "r" #'alchemist-mix-rerun-last-test
-       )
+     Disable for now.
+     #+BEGIN_SRC emacs-lisp :tangle no
+     (use-package inf-elixir
+      :straight (:host github :repo "J3RN/inf-elixir")
+      :functions inf-elixir)
+     #+END_SRC
+**** Define custom alchemist keymaps
+     Alchemist keys start with =C-c a=.
+***** Run keymap
+      #+BEGIN_SRC emacs-lisp :tangle yes
+      (general-def
+        :prefix-map 'my-alchemist-run-map
+        "i" #'inf-elixir
+        "I" #'alchemist-iex-run
+        "g" #'alchemist-iex-send-region-and-go
+        "c" #'alchemist-compile-this-buffer
+        "C" #'alchemist-compile
+        "e" #'alchemist-eval-current-line
+        "E" #'alchemist-eval-region
+        "b" #'alchemist-eval-buffer
+        "B" #'alchemist-execute-buffer
+        "f" #'elixir-format
+        )
 
-     (hercules-def
-       :toggle-funs #'my-alchemist-test-mode
-       :keymap 'my-alchemist-test-map
-       :transient t
-       :flatten t)
+      (hercules-def
+        :toggle-funs #'my-alchemist-run-mode
+        :keymap 'my-alchemist-run-map
+        :transient t
+        :flatten t)
 
-     (general-define-key
-       "C-c a t" 'my-alchemist-test-mode)
+      (general-define-key
+        :keymaps 'alchemist-mode-keymap
+        "C-c a r" 'my-alchemist-run-mode)
+      #+END_SRC
+***** Mix keymap
+      #+BEGIN_SRC emacs-lisp :tangle yes
+      (general-def
+        :prefix-map 'my-alchemist-mix-map
+        "r" #'alchemist-mix
+        "R" #'alchemist-mix-rerun-last-task
+        "h" #'alchemist-hex-info
+        "H" #'alchemist-hex-releases
+        "." #'alchemist-hex-info-at-point
+        "d" #'alchemist-hex-all-dependencies
+        "s" #'alchemist-hex-search
+        )
 
+      (hercules-def
+        :toggle-funs #'my-alchemist-mix-mode
+        :keymap 'my-alchemist-mix-map
+        :transient t
+        :flatten t)
+
+      (general-define-key
+        :keymaps 'alchemist-mode-keymap
+        "C-c a m" 'my-alchemist-mix-mode)
+      #+END_SRC
+***** Testing keymap
+      #+BEGIN_SRC emacs-lisp :tangle yes
+      (general-def
+        :prefix-map 'my-alchemist-test-map
+        "t" #'alchemist-mix-test
+        "s" #'alchemist-mix-test-stale
+        "b" #'alchemist-mix-test-this-buffer
+        "p" #'alchemist-mix-test-at-point
+        "f" #'alchemist-mix-test-file
+        "." #'alchemist-test-jump-to-next-test
+        "," #'alchemist-test-jump-to-previous-test
+        "r" #'alchemist-mix-rerun-last-test
+        )
+
+      (hercules-def
+        :toggle-funs #'my-alchemist-test-mode
+        :keymap 'my-alchemist-test-map
+        :transient t
+        :flatten t)
+
+      (general-define-key
+        :keymaps 'alchemist-mode-keymap
+        "C-c a t" 'my-alchemist-test-mode)
+      #+END_SRC
+**** Prettify elixir symbols
+     #+BEGIN_SRC emacs-lisp :tangle yes
      (defun elixir-mode-prettify-symbols-hook ()
        (setq-local
         prettify-symbols-alist
@@ -1528,7 +1664,9 @@
            ("fn" . ?ƒ))
          prettify-symbols-alist)))
 
-
+     #+END_SRC
+**** Add hooks
+     #+BEGIN_SRC emacs-lisp :tangle yes
      (add-hook 'elixir-mode-hook 'alchemist-mode)
      (add-hook 'elixir-mode-hook 'company-mode)
      (add-hook 'elixir-mode-hook 'elixir-mode-prettify-symbols-hook)
@@ -1539,8 +1677,6 @@
                  (set (make-variable-buffer-local 'ruby-end-check-statement-modifiers)
                       nil)
                  (ruby-end-mode 1)
-                 ;;(bind-keys*
-                 ;; ("C-c a" . my/alchemist-mode/body))
                  ))
      (eval-after-load 'elixir-mode '(require 'ruby-mode-expansions))
      #+END_SRC
@@ -1548,7 +1684,7 @@
 **** Add support for .eex files
      Here we'll switch on =web-mode= so that we can edit HTML properly.
      #+BEGIN_SRC emacs-lisp :tangle yes
-     (add-to-list 'auto-mode-alist '("\\.eex\\'" . web-mode))
+     (add-to-list 'auto-mode-alist '("\\.l?eex\\'" . web-mode))
      #+END_SRC
 
 **** Add support for ExActor keywords
@@ -1601,6 +1737,13 @@
       (flycheck-select-checker 'erlang-otp)
       (flycheck-mode))
 
+    (defun erlang-mode-compile-hook ()
+      (require 'erlang-eunit)
+      (when (projectile-project-p)
+        (add-to-list 'erlang-compile-extra-opts (cons 'i  (projectile-project-p)))
+        (add-to-list 'erlang-eunit-src-candidate-dirs (projectile-project-p))
+        (add-to-list 'erlang-eunit-test-candidate-dirs (projectile-project-p))))
+
     (defun erlang-mode-prettify-symbols-hook ()
       (setq-local
        prettify-symbols-alist
@@ -1621,7 +1764,8 @@
       :mode ("\\.erl\\'" . erlang-mode)
       :hook ((erlang-mode . erlang-mode-flycheck-hook)
              (erlang-mode . erlang-mode-prettify-symbols-hook)
-             (erlang-mode . company-mode)))
+             (erlang-mode . company-mode)
+             (erlang-mode . erlang-mode-compile-hook)))
     #+END_SRC
 
 **** Add zotonic-tpl support
@@ -1646,12 +1790,21 @@
       :config (setq tab-width 2))
     #+END_SRC
 
+*** Go-lang
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package go-mode
+      :defer
+      :mode ("\\.go\\'" . go-mode)
+      :config
+        (setq tab-width 4)
+        (add-hook 'go-mode-hook 'flycheck-mode))
+    #+END_SRC
+
 **** Add flycheck mode
      #+BEGIN_SRC emacs-lisp :tangle yes
      (use-package flycheck-pony
        :defer)
      #+END_SRC
-
 
 *** HTML et al
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1846,10 +1999,16 @@
 
    https://old.reddit.com/r/emacs/comments/b0jzy4/emacscast_8_writing_in_emacs_and_org_mode_part_1/eiiywwm/
    https://www.reddit.com/r/emacs/comments/88v344/workspace_with_isolated_buffers_eyebrowseperspmode/
+** =dap-mode= for elixir
+   https://github.com/emacs-lsp/dap-mode#elixir
+** =emacs-refactor= for elixir
+   https://github.com/Wilfred/emacs-refactor
 ** Remove =M-`= binding
    =M-`= brings up =tmm= which is completely useless to me, so might
    as well be remapped to something handy. Maybe iterate through
    frames/windows?
+** Buffer navigation
+   https://github.com/joostkremers/nswbuff
 ** FIXME:
 *** multiple cursors
 **** https://github.com/dhodges/dotfiles/blob/f808e22a2e47133a0fab549db63241a516cf523c/.emacs.d/dh-lisp/dh-packages.el#L276
