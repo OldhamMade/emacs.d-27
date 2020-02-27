@@ -185,6 +185,10 @@
        (lambda ()
          (setq debug-on-error t)))
      #+END_SRC
+*** Increase the amount of data Emacs reads from processes
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq read-process-output-max (* 1024 1024)) ;; 1mb
+    #+END_SRC
 ** Basic settings
 *** UTF-8 everywhere
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -243,7 +247,8 @@
     My personal theme: https://github.com/OldhamMade/leiptr-them
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package leiptr-theme
-      :straight (leiptr :type git :host github :repo "OldhamMade/leiptr-theme"))
+      :straight (leiptr :type git :host github :repo "OldhamMade/leiptr-theme")
+      :init (load-theme 'leiptr t))
     #+END_SRC
 *** Font: SanFranciscoMono
     This will be set in =early-init.el=, but repeated here for now.
@@ -291,8 +296,9 @@
 *** macOS standard keybindings
     #+BEGIN_SRC emacs-lisp :tangle yes
       (bind-keys*
-       ("H-z" . undo)
-       ("H-Z" . redo)
+       ;; undo/redo handled by alternative package
+       ; ("H-z" . undo)
+       ; ("H-Z" . redo)
        ;; moving around
        ("<next>" . (lambda () (interactive)
                      (condition-case nil (scroll-up)
@@ -962,24 +968,37 @@
       :defer
       :config (add-hook 'emacs-startup-hook 'global-undo-tree-mode))
     #+END_SRC
-*** Add =undo-fu= for better undo behaviour
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (use-package undo-fu-session
-      :straight (undo-fu-session :type git :host gitlab :repo "ideasman42/emacs-undo-fu-session")
-      :general
-        ("H-z" #'undo-fu-only-undo)
-        ("H-S-z" #'undo-fu-only-redo)
-      :init
-        (setq undo-fu-session-directory (expand-file-name "~/Dropbox/.emacs.persist/.undohist")
-              undo-fu-session-incompatible-files
-              '("COMMIT_EDITMSG"
-                "NOTES_EDITMSG"
-                "MERGE_MSG"
-                "TAG_EDITMSG"
-                "\\.gpg\\'"
-                "/tmp"
-                file-remote-p)))
-    #+END_SRC
+*** Undo/redo
+**** Add =undo-fu= for better undo behaviour
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package undo-fu
+       :straight (undo-fu :type git :host gitlab :repo "ideasman42/emacs-undo-fu")
+       :defer
+       :delight
+       :init
+         (global-unset-key (kbd "H-z"))
+         (global-unset-key (kbd "H-Z"))
+       :general
+         ("H-z" #'undo-fu-only-undo)
+         ("H-Z" #'undo-fu-only-redo))
+     #+END_SRC
+**** Add =undo-fu-session= for history
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package undo-fu-session
+       :straight (undo-fu-session :type git :host gitlab :repo "ideasman42/emacs-undo-fu-session")
+       :delight
+       :after undo-fu
+       :init
+         (setq undo-fu-session-directory (expand-file-name "~/Dropbox/.emacs.persist/.undohist")
+               undo-fu-session-incompatible-files
+               '("COMMIT_EDITMSG"
+                 "NOTES_EDITMSG"
+                 "MERGE_MSG"
+                 "TAG_EDITMSG"
+                 "\\.gpg\\'"
+                 "/tmp"
+                 file-remote-p)))
+     #+END_SRC
 *** Unfill
     Unfill adds the inverse of fill-paragraph/-region.
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1069,10 +1088,11 @@
      (use-package expand-region
        :delight
        :bind (("M-[" . er/expand-region)
-              ("M-]" . er/contract-region))
-       :config
-       (er/enable-mode-expansions 'elixir-mode 'er/add-ruby-mode-expansions))
+              ("M-]" . er/contract-region)))
      #+END_SRC
+     FIXME: elixir mode should have expansions similar to ruby-mode
+       ;:config
+       ;(er/enable-mode-expansions 'elixir-mode 'er/add-ruby-mode-expansions)
 *** Braces
 **** Auto-pair braces
      Emacs 24.4+ comes with =electric-pair-mode= which matches =autopair=
@@ -1424,11 +1444,11 @@
 **** Replace Org's bullets with something less noisy
      #+BEGIN_SRC emacs-lisp :tangle yes
      (use-package org-bullets
-       :delight
+       :after org
        :defer
-       :config
+       :init
          (setq org-bullets-bullet-list '("☰" "☷" "▶" "◆" "●" "✸"))
-         (add-hook 'org-mode-hook (lambda () (org-bullets-mode 1))))
+         (add-hook 'org-mode-hook #'org-bullets-mode))
      #+END_SRC
 
 ** Utility functions
@@ -1508,14 +1528,91 @@
        (interactive "r")
        (func-region start end #'url-unhex-string))
      #+END_SRC
-*** Company mode
-**** Enable company-mode globally
+*** Language Server Protocol
+**** lsp-mode
      #+BEGIN_SRC emacs-lisp :tangle yes
-     (add-hook 'emacs-startup-hook 'global-company-mode)
+     (use-package lsp-mode
+       :commands lsp
+       :delight
+       :bind ("C-c h" . lsp-describe-thing-at-point)
+       :hook
+         (elixir-mode . lsp-deferred)
+       :init
+         (add-to-list 'exec-path "~/Projects/elixir/elixir-ls/release")
+         (setq lsp-keymap-prefix "C-c l")
+       :config
+         (dolist (dir '("build$" "deps$"))
+                 (push (concat "[/\\\\]" dir) lsp-file-watch-ignored))
+         (setq
+           lsp-auto-configure t
+           lsp-auto-guess-root t
+           lsp-eldoc-enable-hover nil
+           lsp-enable-completion-at-point t
+           lsp-enable-file-watchers t
+           lsp-file-watch-threshold 10000
+           lsp-keep-workspace-alive nil
+           lsp-log-io t
+           lsp-prefer-flymake nil
+           )
+
+         (add-hook 'before-save-hook
+           (lambda () (when (eq major-mode 'elixir-mode)
+                       (ignore-errors 'lsp-format-buffer)))))
      #+END_SRC
-**** Make Company open a little faster
+           lsp-eldoc-hook '(lsp-hover)
+**** lsp-ui
      #+BEGIN_SRC emacs-lisp :tangle yes
-     (setq company-idle-delay 0.2)
+     (use-package lsp-ui
+       :ensure t
+       :commands lsp-ui-mode
+       :after lsp-mode
+       :config
+         (setq
+           lsp-ui-doc-enable nil
+           lsp-ui-sideline-enable nil
+           lsp-ui-sideline-show-hover nil
+           lsp-ui-flycheck-enable t
+           lsp-ui-sideline-ignore-duplicate t
+           ))
+     #+END_SRC
+               lsp-ui-doc-enable t
+               lsp-ui-doc-delay 1.0
+               lsp-ui-doc-position 'bottom
+**** lsp-ivy
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package lsp-ivy
+       :commands lsp-ivy-workspace-symbol)
+     #+END_SRC
+**** eglot: Client for Language Server Protocol (LSP) servers
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package eglot
+       :defer
+       :delight
+       :commands (eglot)
+       :bind (:map eglot-mode-map
+               ("C-c n" . eglot-rename) ; rename identifier
+               ("C-c f" . eglot-format)))
+     #+END_SRC
+**** dap-mode
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package dap-mode)
+     #+END_SRC
+*** Company mode
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package company
+      :config
+        (add-hook 'emacs-startup-hook 'global-company-mode) ; Enable company-mode globally
+        (setq company-idle-delay 0.1) ; Make Company open a little faster
+        )
+    #+END_SRC
+**** Add lsp backend
+     #+BEGIN_SRC emacs-lisp :tangle no
+     (use-package company-lsp
+       :after (company lsp-mode)
+       :init (setq company-lsp-cache-candidates 'auto)
+       :commands company-lsp
+       :config
+       (push 'company-lsp company-backends))
      #+END_SRC
 *** Flycheck
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1534,119 +1631,81 @@
        :config
          (add-hook 'flycheck-mode-hook 'flycheck-color-mode-line-mode))
      #+END_SRC
-
+*** Code Folding
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package lsp-origami
+      :defer
+      :general
+        ("C-c TAB" 'origami-recursively-toggle-node)
+      :config
+        (add-hook 'origami-mode-hook #'lsp-origami-mode))
+    #+END_SRC
 *** Elixir
     Elixir is fast becoming my primary programming language,
     so there's lots of tweaks and focus here
-**** Add =elixir-mode=
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (use-package elixir-mode
-       :delight
-       (elixir-mode "[ex]")
-       (ruby-end-mode "")
-       :mode ("\\.exs?\\'" . elixir-mode))
-     #+END_SRC
 **** Add =ruby-end= to support the =end= keyword
      #+BEGIN_SRC emacs-lisp :tangle yes
      (use-package ruby-end
        :defer)
      #+END_SRC
-**** Add Alchemist
+**** Add =elixir-mode=
      #+BEGIN_SRC emacs-lisp :tangle yes
-     (use-package alchemist
-       :defer
-       :delight
-       (alchemist-mode "[al]")
-       (alchemist-hex-mode "[hex]")
-       (alchemist-test-mode "[altest]")
+     (use-package elixir-mode
+       :after (ruby-end elgot)
        :init
-       (setq alchemist-compile-project-when-needed t)
-       (setq alchemist-hooks-compile-on-save t)
+         (add-to-list
+           'eglot-server-programs
+             '(elixir-mode . ("sh" "~/Projects/elixir/elixir-ls/release/language-server.sh")))
+       :delight
+         (elixir-mode "[ex]")
+         (ruby-end-mode "")
+       :mode ("\\.exs?\\'" . elixir-mode)
        )
+       ;(:config
+       ;  (add-to-list 'eglot-server-programs
+       ;    `(elixir-mode "~/Projects/elixir/elixir-ls/release/language-server.sh")))
+     #+END_SRC
+       :hook (company-mode lsp)
+**** Add =exunit.el=
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package exunit
+       :straight (exunit :type git :host github :repo "ananthakumaran/exunit.el"))
      #+END_SRC
 **** Add =inf-elixir=
      Pop open and interact with iEX
-
-     Disable for now.
      #+BEGIN_SRC emacs-lisp :tangle no
      (use-package inf-elixir
-      :straight (:host github :repo "J3RN/inf-elixir")
-      :functions inf-elixir)
+      :straight (inf-elixir :host github :repo "J3RN/inf-elixir")
+      :functions
+        (inf-elixir
+         run-elixir
+         inf-elixir-project
+         inf-elixir-send-line
+         inf-elixir-send-region
+         inf-elixir-send-buffer))
      #+END_SRC
-**** Define custom alchemist keymaps
-     Alchemist keys start with =C-c a=.
-***** Run keymap
-      #+BEGIN_SRC emacs-lisp :tangle yes
-      (general-def
-        :prefix-map 'my-alchemist-run-map
-        "i" #'inf-elixir
-        "I" #'alchemist-iex-run
-        "g" #'alchemist-iex-send-region-and-go
-        "c" #'alchemist-compile-this-buffer
-        "C" #'alchemist-compile
-        "e" #'alchemist-eval-current-line
-        "E" #'alchemist-eval-region
-        "b" #'alchemist-eval-buffer
-        "B" #'alchemist-execute-buffer
-        "f" #'elixir-format
-        )
-
-      (hercules-def
-        :toggle-funs #'my-alchemist-run-mode
-        :keymap 'my-alchemist-run-map
-        :transient t
-        :flatten t)
-
-      (general-define-key
-        :keymaps 'alchemist-mode-keymap
-        "C-c a r" 'my-alchemist-run-mode)
-      #+END_SRC
-***** Mix keymap
-      #+BEGIN_SRC emacs-lisp :tangle yes
-      (general-def
-        :prefix-map 'my-alchemist-mix-map
-        "r" #'alchemist-mix
-        "R" #'alchemist-mix-rerun-last-task
-        "h" #'alchemist-hex-info
-        "H" #'alchemist-hex-releases
-        "." #'alchemist-hex-info-at-point
-        "d" #'alchemist-hex-all-dependencies
-        "s" #'alchemist-hex-search
-        )
-
-      (hercules-def
-        :toggle-funs #'my-alchemist-mix-mode
-        :keymap 'my-alchemist-mix-map
-        :transient t
-        :flatten t)
-
-      (general-define-key
-        :keymaps 'alchemist-mode-keymap
-        "C-c a m" 'my-alchemist-mix-mode)
-      #+END_SRC
+**** Add =flycheck-credo=
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package flycheck-credo
+       :init
+       (flycheck-credo-setup)
+       :config
+       (setq flycheck-elixir-credo-strict t))
+     #+END_SRC
+**** Define custom elixir keymaps
+     Elixir keys start with =C-c e=.
 ***** Testing keymap
       #+BEGIN_SRC emacs-lisp :tangle yes
-      (general-def
-        :prefix-map 'my-alchemist-test-map
-        "t" #'alchemist-mix-test
-        "s" #'alchemist-mix-test-stale
-        "b" #'alchemist-mix-test-this-buffer
-        "p" #'alchemist-mix-test-at-point
-        "f" #'alchemist-mix-test-file
-        "." #'alchemist-test-jump-to-next-test
-        "," #'alchemist-test-jump-to-previous-test
-        "r" #'alchemist-mix-rerun-last-test
-        )
-
-      (hercules-def
-        :toggle-funs #'my-alchemist-test-mode
-        :keymap 'my-alchemist-test-map
-        :transient t
-        :flatten t)
-
       (general-define-key
-        :keymaps 'alchemist-mode-keymap
-        "C-c a t" 'my-alchemist-test-mode)
+        :prefix "C-c e"
+        "" '(nil :which-key "elixir")
+        "t" '(exunit-verify-all :which-key "test project")
+        "b" '(exunit-verify :which-key "test buffer")
+        "u" '(exunit-verify-all-in-umbrella :which-key "test umbrella")
+        "." '(exunit-verify-single :which-key "test at point")
+        "r" '(exunit-rerun :which-key "rerun last")
+        "F" '(xref-find-definitions :which-key "defs (here)")
+        "f" '(xref-find-definitions-other-window :which-key "defs (other window)"))
       #+END_SRC
 **** Prettify elixir symbols
      #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1667,8 +1726,6 @@
      #+END_SRC
 **** Add hooks
      #+BEGIN_SRC emacs-lisp :tangle yes
-     (add-hook 'elixir-mode-hook 'alchemist-mode)
-     (add-hook 'elixir-mode-hook 'company-mode)
      (add-hook 'elixir-mode-hook 'elixir-mode-prettify-symbols-hook)
      (add-hook 'elixir-mode-hook
                (lambda ()
@@ -1685,6 +1742,8 @@
      Here we'll switch on =web-mode= so that we can edit HTML properly.
      #+BEGIN_SRC emacs-lisp :tangle yes
      (add-to-list 'auto-mode-alist '("\\.l?eex\\'" . web-mode))
+     (setq web-mode-engines-alist
+       '(("elixir" . "\\.l?eex\\'")))
      #+END_SRC
 
 **** Add support for ExActor keywords
@@ -1702,11 +1761,11 @@
      #+END_SRC
 
 **** Reformat on save
-     #+BEGIN_SRC emacs-lisp :tangle no
+     #+BEGIN_SRC emacs-lisp :tangle yes
      (defun my/elixir-on-save-hook ()
        (add-hook 'before-save-hook
          (lambda ()
-           (unless (equal major-mode 'deadgrep-edit-mode)
+           (if (equal major-mode 'elixir-mode)
              (ignore-errors (elixir-format nil t))))))
      (add-hook 'elixir-mode-hook 'my/elixir-on-save-hook)
      #+END_SRC
@@ -1783,7 +1842,8 @@
       :mode ("\\.nim\\'" . nim-mode))
     #+END_SRC
 *** Pony
-    #+BEGIN_SRC emacs-lisp :tangle yes
+    Disabled for now as I don't use this language often.
+    #+BEGIN_SRC emacs-lisp :tangle no
     (use-package ponylang-mode
       :defer
       :mode ("\\.pony\\'" . ponylang-mode)
@@ -1791,7 +1851,8 @@
     #+END_SRC
 
 *** Go-lang
-    #+BEGIN_SRC emacs-lisp :tangle yes
+    Disabled for now as I don't use this language often.
+    #+BEGIN_SRC emacs-lisp :tangle no
     (use-package go-mode
       :defer
       :mode ("\\.go\\'" . go-mode)
@@ -1874,7 +1935,8 @@
       :mode ("\\Dockerfile\\'" . dockerfile-mode))
     #+END_SRC
 *** RAML
-    #+BEGIN_SRC emacs-lisp :tangle yes
+    Disabled for now as I don't use this language often.
+    #+BEGIN_SRC emacs-lisp :tangle no
     (use-package raml-mode
       :straight (raml-mode :type git :host github :repo "victorquinn/raml-mode")
       :init (setq raml-indent-offset 2)

@@ -94,3 +94,4 @@ flycheck_*.el
 /places
 
 /undohist/
+/.lsp-session-*

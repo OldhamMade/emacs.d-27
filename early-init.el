@@ -12,15 +12,14 @@
       ;; don't add that `custom-set-variables' block to my init.el!
       package--init-file-ensured t)
 
-;; disable some UI features I never use
-(blink-cursor-mode -1)
-(tool-bar-mode -1)
-(scroll-bar-mode -1)
+(tool-bar-mode 0)
+(menu-bar-mode 0)
+(scroll-bar-mode 0)
+(tooltip-mode 0)
 
 (setq visible-bell nil
       initial-scratch-message nil
       message-log-max 512
       debug-on-error t)
 
-;; set the font early
-(set-face-attribute 'default nil :font "SFMono Nerd Font:pixelsize=10:weight=normal:slant=normal:width=normal:spacing=100:scalable=true:hinting=true")
+(provide 'early-init)
