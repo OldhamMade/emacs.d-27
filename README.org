@@ -242,6 +242,10 @@
      #+BEGIN_SRC emacs-lisp :tangle yes
      (use-package use-package-ensure-system-package)
      #+END_SRC
+**** Add =asdf= to exec path
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (add-to-list 'exec-path (expand-file-name "~/.asdf/shims"))
+     #+END_SRC
 ** Interface
 *** Theme
     My personal theme: https://github.com/OldhamMade/leiptr-them
@@ -518,7 +522,7 @@
          (counsel projectile)
        :init
          (setq projectile-completion-system 'ivy
-               projectile-switch-project-action 'counsel-projectile-find-file)
+               projectile-switch-project-action 'projectile-vc)
        :config
          (general-define-key
            :keymaps 'projectile-mode-map
@@ -727,6 +731,15 @@
         (add-hook 'emacs-startup-hook (lambda () (change-cursor-mode 1))))
     #+END_SRC
 ** Files
+*** Set a large =recentf= list, after startup
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (add-hook 'emacs-startup-hook
+      (lambda ()
+        (setq recentf-max-menu-items 100
+              recentf-max-saved-items 100)
+        (recentf-mode 1)
+        ))
+    #+END_SRC
 *** Enable auto-save of files as they are edited, so that no changes are lost
     #+BEGIN_SRC emacs-lisp :tangle no
     (use-package super-save
@@ -1145,6 +1158,10 @@
       :config
         (crux-reopen-as-root-mode))
     #+END_SRC
+**** Set title for whichkey prefix entry
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (define-key mode-specific-map "c" '("change case"))
+     #+END_SRC
 *** Whitespace
 **** Delete trailing whitespace
      #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1360,10 +1377,7 @@
                  magit-log
                  magit-commit
                  magit-stage-file)
-      :hook ((magit-mode . turn-on-magit-gitflow)
-             (magit-diff-visit-file . (lambda ()
-                                        (when smerge-mode
-                                          (my/smerge-hydra/body)))))
+      :hook ((magit-mode . turn-on-magit-gitflow))
       :config
       (setq magit-branch-arguments nil
             magit-branch-read-upstream-first 'fallback
@@ -1394,10 +1408,40 @@
               #'magit-set-repo-dirs-from-projectile)
     (setq smerge-command-prefix "\C-c m")
     #+END_SRC
-
+**** TODO reintroduce =smerge= keybindings
+     I originally had the following magit hook, but without hydra
+     it raises an error. Needs to be replaced with a General setup.
+     #+BEGIN_SRC emacs-lisp :tangle no
+     (magit-diff-visit-file . (lambda ()
+                                        (when smerge-mode
+                                          (my/smerge-hydra/body))))
+     #+END_SRC
+**** =smerge= keybindings
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (general-define-key
+       :keymaps 'smerge-mode-map
+       :prefix "C-c -"
+       "" '(nil :which-key "smerge")
+       "n" '(smerge-next :which-key "next")
+       "p" '(smerge-prev :which-key "previous")
+       "o" '(smerge-keep-lower :which-key "other (upper)")
+       "m" '(smerge-keep-upper :which-key "mine (lower)")
+       "u" '(smerge-keep-upper :which-key "upper (other)")
+       "l" '(smerge-keep-lower :which-key "lower (mine)")
+       )
+     #+END_SRC
+**** Add advice around branch naming to convert spaces to dashes
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (advice-add 'magit-whitespace-disallowed :around
+       (lambda (orig-fun &rest args) (interactive) (insert "-")))
+     #+END_SRC
 ** Org-mode
 *** Tweaks
     These are tweaks to the built-in org-mode
+**** Ensure UTF-8
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (setq org-export-coding-system 'utf-8)
+     #+END_SRC
 **** Enable shift-selection
      Standard Emacs =S-<cursor>= commands conflict with Org’s use of
      =S-<cursor>= to change timestamps, TODO keywords, priorities, and
@@ -1439,7 +1483,102 @@
      (general-define-key
        "C-c o" 'org-capture)
      (setq org-default-notes-file "~/Dropbox/notes.org")
+     (defvar my-org-capture-directory
+       (expand-file-name "~/Dropbox/org")
+       "Location for all org-mode capture files.")
      #+END_SRC
+***** =doct=: Declarative Org Capture Templates
+      #+BEGIN_SRC emacs-lisp :tangle yes
+      (use-package doct
+        :ensure t
+:after org
+:init (setq org-capture-templates '())
+  :config
+   (setq til-categories
+     '(
+       ("Ack" "a")
+       ("Elixir" "x")
+       ("Emacs" "e")
+       ("Git" "g")
+       ("Makefiles" "m")
+       ("Phoenix" "p")
+       ("Python" "P")
+       ("Shell" "s")
+       ("Tmux" "t")
+       ))
+   (setq idea-categories
+     '(
+       ("Open-Source Library" "o")
+       ("Physical Product" "p")
+       ("Web App" "w")
+       ("iOS App" "i")
+       ("macOS App" "m")
+       ))
+   (setq org-capture-templates
+    (doct `(:group
+             :empty-lines 1
+             :children
+             (("Tasks"
+               :keys "t"
+               :file ,(expand-file-name "tasks.org"  my-org-capture-directory)
+               :clock-in t
+               :clock-resume t
+               :children
+               (("Today" :keys "t" :type entry :headline "Uncategorized"
+                 :datetree t :tree-type week :template "* TODO %?\n %i\n %a\n")
+                ("Reading" :keys "r" :type entry :headline "Reading"
+                 :template "* TODO %^{name}\n %a\n")
+                ("Work" :keys "w" :type entry :headline "Work"
+                 :template "* TODO %^{taskname}\n %a\n")))
+              ("Blog"
+               :keys "b"
+               :file ,(expand-file-name "blog.org"  my-org-capture-directory)
+               :type entry
+               :template "* TODO %^{name}\n  %i%?\n  %a"
+              )
+              ("TIL"
+               :keys "l"
+               :file ,(expand-file-name "til.org"  my-org-capture-directory)
+               :type entry
+               :template "* TODO %^{name}\n  %i%?\n  %a"
+               :children ,(cl-loop for (key value) in (sort til-categories (lambda (a b) (string< (car a) (car b))))
+                   collect (list key :keys value :headline key))
+              )
+              ("Idea"
+               :keys "i"
+               :file ,(expand-file-name "project-ideas.org"  my-org-capture-directory)
+               :type entry
+               :template "* TODO %^{name}\n  %i%?\n  %a"
+               :children ,(cl-loop for (key value) in (sort idea-categories (lambda (a b) (string< (car a) (car b))))
+                   collect (list key :keys value :headline key))
+              )
+              ("Project"
+               :keys "p"
+               :file ,(defun my/project-todo-file ()
+                        (let ((file (expand-file-name "TODO.org"
+                                                      (when (functionp 'projectile-project-root)
+                                                        (projectile-project-root)))))
+                          (with-current-buffer (find-file-noselect file)
+                            (org-mode)
+                            ;; Set to UTF-8 because we may be visiting raw file
+                            (setq buffer-file-coding-system 'utf-8-unix)
+                            (when-let* ((headline (doct-get :headline)))
+                              (unless (org-find-exact-headline-in-buffer headline)
+                                (goto-char (point-max))
+                                (insert "* " headline)
+                                (org-set-tags (downcase headline))))
+                            file)))
+               :template (lambda () (concat "* %{todo-state} " (when (y-or-n-p "Link? ") "%A\n") "%?"))
+               :todo-state "TODO"
+               :children (("bug"           :keys "b" :headline "Bugs")
+                          ("documentation" :keys "d" :headline "Documentation")
+                          ("enhancement"   :keys "e" :headline "Enhancements")
+                          ("feature"       :keys "f" :headline "Features")
+                          ("optimization"  :keys "o" :headline "Optimizations")
+                          ("miscellaneous" :keys "m" :headline "Miscellaneous")
+                          ("security"      :keys "s" :headline "Security")))))
+          )))
+        #+END_SRC
 *** Packages
 **** Replace Org's bullets with something less noisy
      #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1537,6 +1676,7 @@
        :bind ("C-c h" . lsp-describe-thing-at-point)
        :hook
          (elixir-mode . lsp-deferred)
+         (python-mode . lsp-deferred)
        :init
          (add-to-list 'exec-path "~/Projects/elixir/elixir-ls/release")
          (setq lsp-keymap-prefix "C-c l")
@@ -1589,6 +1729,7 @@
        :defer
        :delight
        :commands (eglot)
+       :hook ((python-mode . eglot-ensure))
        :bind (:map eglot-mode-map
                ("C-c n" . eglot-rename) ; rename identifier
                ("C-c f" . eglot-format)))
@@ -1656,6 +1797,7 @@
          (add-to-list
            'eglot-server-programs
              '(elixir-mode . ("sh" "~/Projects/elixir/elixir-ls/release/language-server.sh")))
+         (add-to-list 'eglot-server-programs '(python-mode "pyls"))
        :delight
          (elixir-mode "[ex]")
          (ruby-end-mode "")
@@ -1820,7 +1962,9 @@
     (use-package erlang
       :after (flycheck)
       :init (my/define-erlang-flychecker)
-      :mode ("\\.erl\\'" . erlang-mode)
+      :mode (("\\.[eh]rl\\'" . erlang-mode)
+             ("\\.yaws?\\'" . erlang-mode)
+             ("\\.escript?\\'" . erlang-mode))
       :hook ((erlang-mode . erlang-mode-flycheck-hook)
              (erlang-mode . erlang-mode-prettify-symbols-hook)
              (erlang-mode . company-mode)
@@ -1835,11 +1979,41 @@
         (add-to-list 'auto-mode-alist '("\\.tpl\\'" . zotonic-tpl-mode)))
      #+END_SRC
 
+*** Python
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package python-mode
+      :defer
+      :config
+        (setq lsp-pyls-plugins-pylint-enabled t)
+        (setq lsp-pyls-plugins-pycodestyle-enabled nil)
+      :hook
+        (python-mode . subword-mode)
+        (python-mode .
+          (lambda ()
+            (defun py-describe-symbol nil)
+            (defun py-help-at-point nil)
+            ))
+      :mode ("\\.py\\'" . python-mode))
+    #+END_SRC
+**** Add docstring support
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package python-docstring
+       :after python
+       :bind
+       (:map python-mode-map
+         ([remap fill-paragraph] . python-docstring-fill)))
+     #+END_SRC
 *** Nim
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package nim-mode
       :defer
       :mode ("\\.nim\\'" . nim-mode))
+    #+END_SRC
+*** Crystal
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package crystal-mode
+      :defer
+      :mode ("\\.cr\\'" . crystal-mode))
     #+END_SRC
 *** Pony
     Disabled for now as I don't use this language often.
@@ -1908,6 +2082,16 @@
     (add-hook 'js2-mode-hook #'js2-imenu-extras-mode)
     (add-hook 'js2-mode-hook 'company-mode)
     #+END_SRC
+*** TypeScript
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package typescript-mode
+      :defer
+      :mode "\\.ts\\'"
+      :config
+        (setq typescript-indent-level 2)
+        (setq tab-width 2)
+        )
+    #+END_SRC
 *** Sass/Scss
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package sass-mode
@@ -1965,7 +2149,13 @@
     (add-hook 'shell-mode-hook 'ansi-color-for-comint-mode-on)
     (add-to-list 'comint-output-filter-functions 'ansi-color-process-output)
     #+END_SRC
-
+*** Better terminal colours
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package eterm-256color
+      :delight
+      :init
+        (add-hook 'term-mode-hook #'eterm-256color-mode))
+    #+END_SRC
 ** Finalizing
 *** Add profiler to diagnose start-up issues
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1984,6 +2174,9 @@
           gcs-done)))
     #+END_SRC
 * TODOs
+** Introduce =matcha=
+   Matcha may fix a lot of my annoyances about discoverability
+   https://github.com/jojojames/matcha
 ** Display menu for =ace-window=
    I really want to see a =which-key= menu for the
    extra commands available for =ace-window= as I constantly
