@@ -95,3 +95,7 @@ flycheck_*.el
 
 /undohist/
 /.lsp-session-*
+/.dap-breakpoints
+/bookmarks
+/projects
+/var/

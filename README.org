@@ -8,14 +8,12 @@
   development.
 * Contents
 ** =early-init.el=
-   The following configuration will be moved to =early-init.el= for
-   performance reasons when emacs 27 is available from
-   =railwaycat/homebrew-emacs=. Until then, it will be triggered as
-   early as possible.
+   The following configuration have been moved to =early-init.el= for
+   performance reasons, and are therefore not tangled here.
 *** Use lexical binding
     This buys a small improvement in performance, but every little bit
     helps.
-    #+BEGIN_SRC emacs-lisp :tangle yes
+    #+BEGIN_SRC emacs-lisp :tangle no
     ;; -*- lexical-binding: t; -*-
     #+END_SRC
 *** Increase startup threshold
@@ -24,39 +22,47 @@
     increasing to maximum we reduce the number of pauses due to
     garbage collection during setup.
 
-    #+BEGIN_SRC emacs-lisp :tangle yes
+    #+BEGIN_SRC emacs-lisp :tangle no
     (setq gc-cons-threshold most-positive-fixnum ; 2^61 bytes
           gc-cons-percentage 0.6)
     #+END_SRC
 *** Hide the toolbar
-    #+BEGIN_SRC emacs-lisp :tangle yes
+    #+BEGIN_SRC emacs-lisp :tangle no
     (ignore-errors
       (tool-bar-mode -1))
     #+END_SRC
 *** Hide scrollbars
-    #+BEGIN_SRC emacs-lisp :tangle yes
+    #+BEGIN_SRC emacs-lisp :tangle no
     (ignore-errors
       (scroll-bar-mode -1))
     #+END_SRC
 *** Disable the cursor blink
-    #+BEGIN_SRC emacs-lisp :tangle yes
+    #+BEGIN_SRC emacs-lisp :tangle no
     (blink-cursor-mode -1)
     #+END_SRC
-*** Disable visual bell
-    #+BEGIN_SRC emacs-lisp :tangle yes
+*** Disable alarm bells
+    #+BEGIN_SRC emacs-lisp :tangle no
     (setq visible-bell nil)
+    (setq ring-bell-function 'ignore)
     #+END_SRC
 *** Disable instructions in the scratch buffer
-    #+BEGIN_SRC emacs-lisp :tangle yes
+    #+BEGIN_SRC emacs-lisp :tangle no
     (setq initial-scratch-message nil)
     #+END_SRC
 *** Reduce the message log to the last 512 entries
-    #+BEGIN_SRC emacs-lisp :tangle yes
+    #+BEGIN_SRC emacs-lisp :tangle no
     (setq message-log-max 512)
     #+END_SRC
 *** Enable debug mode when errors occur
-    #+BEGIN_SRC emacs-lisp :tangle yes
+    #+BEGIN_SRC emacs-lisp :tangle no
     (setq debug-on-error t)
+    #+END_SRC
+*** Disable window resizing on font change
+    Emacs resizes the (GUI) frame when your newly set font is larger
+    (or smaller) than the system default. This seems to add 0.4-1s
+    to startup.
+    #+BEGIN_SRC emacs-lisp :tangle no
+    (setq frame-inhibit-implied-resize t)
     #+END_SRC
 ** Startup
 *** Better GC handling
@@ -90,7 +96,16 @@
      (add-hook 'minibuffer-setup-hook #'my/minibuffer-setup-hook)
      (add-hook 'minibuffer-exit-hook #'my/minibuffer-exit-hook)
      #+END_SRC
+**** Do a GC when emacs loses focus
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (defun dotfiles--gc-on-last-frame-out-of-focus ()
+       "GC if all frames are inactive."
+       (if (seq-every-p #'null (mapcar #'frame-focus-state (frame-list)))
+         (garbage-collect)))
 
+     (add-function :after after-focus-change-function
+       #'dotfiles--gc-on-last-frame-out-of-focus)
+     #+END_SRC
 *** Unset file-name-handler-alist temporarily
     Emacs consults this variable every time a file is read or library
     loaded, or when certain functions in the file API are used (like
@@ -110,7 +125,19 @@
       (lambda ()
         (setq file-name-handler-alist my--file-name-handler-alist)))
     #+END_SRC
-
+*** Check for native JSON support
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (if (functionp 'json-serialize)
+      (message "Native JSON is available")
+      (message "Native JSON is *not* available"))
+    #+END_SRC
+*** Set native compilation if available
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (if (and (fboundp 'native-comp-available-p)
+       (native-comp-available-p))
+       (setq comp-deferred-compilation t)
+       (message "Native complation is *not* available"))
+    #+END_SRC
 *** Add timestamps to messages
     Adding timestamps to the messages so we can see whether anything
     is causing emacs to block for a significant amount of time.
@@ -179,11 +206,13 @@
     #+BEGIN_SRC emacs-lisp :tangle yes
     (setq help-window-select t)
     #+END_SRC
-**** And disable them again once we've loaded
+**** Disable debug-on-error once we've loaded
+     This is useful during the start-up process,
+     but becomes a nuisance once we're in edit mode.
      #+BEGIN_SRC emacs-lisp :tangle yes
      (add-hook 'emacs-startup-hook
        (lambda ()
-         (setq debug-on-error t)))
+         (setq debug-on-error nil)))
      #+END_SRC
 *** Increase the amount of data Emacs reads from processes
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -191,7 +220,8 @@
     #+END_SRC
 ** Basic settings
 *** UTF-8 everywhere
-    #+BEGIN_SRC emacs-lisp :tangle yes
+    Note: moved to =early-init=
+    #+BEGIN_SRC emacs-lisp :tangle no
       (set-charset-priority 'unicode)
       (setq locale-coding-system   'utf-8)   ; pretty
       (set-terminal-coding-system  'utf-8)   ; pretty
@@ -238,8 +268,8 @@
        :config
          (with-eval-after-load 'exec-path-from-shell-initialize))
      #+END_SRC
-**** Ensure system packages deps are available
-     #+BEGIN_SRC emacs-lisp :tangle yes
+**** ~Ensure system packages deps are available~
+     #+BEGIN_SRC emacs-lisp :tangle no
      (use-package use-package-ensure-system-package)
      #+END_SRC
 **** Add =asdf= to exec path
@@ -247,6 +277,21 @@
      (add-to-list 'exec-path (expand-file-name "~/.asdf/shims"))
      #+END_SRC
 ** Interface
+*** macOS fixes
+**** Use native full-screen
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (setq ns-use-native-fullscreen t)
+     #+END_SRC
+**** Don't open new windows from terminal
+     This stops new windows (frames) opening when
+     calling emacs from the terminal with a filename
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (setq ns-pop-up-frames nil)
+     #+END_SRC
+**** Try to fix colours
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (setq ns-use-srgb-colorspace t)
+     #+END_SRC
 *** Theme
     My personal theme: https://github.com/OldhamMade/leiptr-them
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -255,10 +300,19 @@
       :init (load-theme 'leiptr t))
     #+END_SRC
 *** Font: SanFranciscoMono
-    This will be set in =early-init.el=, but repeated here for now.
-    #+BEGIN_SRC emacs-lisp :tangle yes
+    This has been set in =early-init.el=, but repeated here for completeness.
+    #+BEGIN_SRC emacs-lisp :tangle no
     (set-face-attribute 'default nil :font "SFMono Nerd Font:pixelsize=10:weight=normal:slant=normal:width=normal:spacing=100:scalable=true:hinting=true")
     #+END_SRC
+*** Enable Emoji
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package unicode-fonts
+       :ensure t
+       :config
+         (when (member "Apple Color Emoji" (font-family-list))
+           (set-fontset-font t 'symbol "Apple Color Emoji" nil 'prepend))
+         (unicode-fonts-setup))
+     #+END_SRC
 *** Show a visual bell
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package mode-line-bell
@@ -453,11 +507,6 @@
      (use-package counsel
        :delight
        :defer
-       :ensure-system-package
-         ((fzf . fzf)
-          (fd . fd)
-          (ag . ag)
-          (rg . ripgrep))
        :after (ivy)
        :bind
          ((:map counsel-describe-map ("M-." . counsel-find-symbol))
@@ -678,7 +727,7 @@
        (add-hook hook
          (lambda () (setq show-trailing-whitespace nil))))
      #+END_SRC
-*** Lines that go over 80 chars
+*** Lines that go over 80 chars for prog/web modes
     #+BEGIN_SRC emacs-lisp :tangle yes
       (defun my/load-whitespace ()
         (require 'whitespace)
@@ -686,7 +735,8 @@
         (setq whitespace-style '(face lines-tail))
         (global-whitespace-mode +1))
 
-      (add-hook 'emacs-startup-hook 'my/load-whitespace)
+      (add-hook 'prog-mode-hook 'my/load-whitespace)
+      (add-hook 'web-mode-hook 'my/load-whitespace)
     #+END_SRC
 *** Colour references, displaying the colour referenced
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -799,8 +849,13 @@
     #+END_SRC
 ** Buffers
 *** Initial buffer major mode: text
+    Switch to =text-mode= once startup has completed.
+
     #+BEGIN_SRC emacs-lisp :tangle yes
-    (setq initial-major-mode 'text-mode)
+    (setq initial-major-mode 'fundamental-mode)
+    (add-hook 'emacs-startup-hook
+      (lambda ()
+        (setq initial-major-mode 'text-mode)))
     #+END_SRC
 
 *** New Empty Buffer
@@ -1249,8 +1304,9 @@
 *** Synonym injection
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package synosaurus
-      :ensure-system-package
-        (wn . wordnet)
+      ; doesn't work with emacs-plus
+      ;:ensure-system-package
+      ;  (wn . wordnet)
       :commands (synosaurus-mode
                  synosaurus-lookup
                  synosaurus-choose-and-replace)
@@ -1438,6 +1494,11 @@
 ** Org-mode
 *** Tweaks
     These are tweaks to the built-in org-mode
+**** stuff
+     #+begin_#+BEGIN_SRC emacs-lisp :tangle yes
+     ?
+     #+END_SRC
+     #+end_#+BEGIN_SRC
 **** Ensure UTF-8
      #+BEGIN_SRC emacs-lisp :tangle yes
      (setq org-export-coding-system 'utf-8)
@@ -1472,12 +1533,16 @@
       #+BEGIN_SRC emacs-lisp :tangle yes
       (setq org-src-tab-acts-natively nil)
       #+END_SRC
-**** Additional templates
-     Org-mode has "Easy Templates", here are some additions:
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (add-to-list 'org-structure-template-alist
-             '("S" "#+BEGIN_SRC emacs-lisp :tangle yes\n?\n#+END_SRC"))
-     #+END_SRC
+***** Return to the previous "easy templates"
+      #+BEGIN_SRC emacs-lisp :tangle yes
+      (require 'org-tempo)
+      #+END_SRC
+***** Additional templates
+      Org-mode has "Easy Templates", here are some additions:
+      #+BEGIN_SRC emacs-lisp :tangle yes
+      (add-to-list 'org-structure-template-alist
+              '("S" . "#+BEGIN_SRC emacs-lisp :tangle yes\n?\n#+END_SRC"))
+      #+END_SRC
 **** Org-Capture
      #+BEGIN_SRC emacs-lisp :tangle yes
      (general-define-key
@@ -1497,9 +1562,11 @@
    (setq til-categories
      '(
        ("Ack" "a")
+       ("ASDF" "A")
        ("Elixir" "x")
        ("Emacs" "e")
        ("Git" "g")
+       ("Magit" "M")
        ("Makefiles" "m")
        ("Phoenix" "p")
        ("Python" "P")
@@ -1631,8 +1698,9 @@
      #+BEGIN_SRC emacs-lisp :tangle yes
      (use-package dumb-jump
        :delight
-       :ensure-system-package
-         (rg . ripgrep)
+       ; doesn't work with emacs-plus
+       ;:ensure-system-package
+       ;  (rg . ripgrep)
        :general
          (:keymaps 'goto-map
           "j j" 'dumb-jump-go
@@ -1697,7 +1765,14 @@
 
          (add-hook 'before-save-hook
            (lambda () (when (eq major-mode 'elixir-mode)
-                       (ignore-errors 'lsp-format-buffer)))))
+                       (ignore-errors 'lsp-format-buffer))))
+         (lsp-register-custom-settings
+            '(("pyls.plugins.pyls_mypy.enabled" t t)
+              ("pyls.plugins.pyls_mypy.live_mode" nil t)
+              ;("pyls.plugins.pyls_black.enabled" t t)
+              ;("pyls.plugins.pyls_isort.enabled" t t)
+              ))
+       )
      #+END_SRC
            lsp-eldoc-hook '(lsp-hover)
 **** lsp-ui
@@ -1744,6 +1819,8 @@
       :config
         (add-hook 'emacs-startup-hook 'global-company-mode) ; Enable company-mode globally
         (setq company-idle-delay 0.1) ; Make Company open a little faster
+        (define-key company-active-map (kbd "C-f") 'company-filter-candidates) ; allow filtering
+        (define-key company-active-map (kbd "C-/") 'counsel-company) ; move to minibuffer
         )
     #+END_SRC
 **** Add lsp backend
@@ -1834,21 +1911,31 @@
        :config
        (setq flycheck-elixir-credo-strict t))
      #+END_SRC
+**** Define custom functions
+***** =elixir-find-definition=
+      #+BEGIN_SRC emacs-lisp :tangle yes
+      (defun elixir-find-definition (var)
+        (interactive "vDefinition: ")
+        (lsp-find-definition var)
+        )
+      #+END_SRC
 **** Define custom elixir keymaps
      Elixir keys start with =C-c e=.
-***** Testing keymap
-      #+BEGIN_SRC emacs-lisp :tangle yes
-      (general-define-key
-        :prefix "C-c e"
-        "" '(nil :which-key "elixir")
-        "t" '(exunit-verify-all :which-key "test project")
-        "b" '(exunit-verify :which-key "test buffer")
-        "u" '(exunit-verify-all-in-umbrella :which-key "test umbrella")
-        "." '(exunit-verify-single :which-key "test at point")
-        "r" '(exunit-rerun :which-key "rerun last")
-        "F" '(xref-find-definitions :which-key "defs (here)")
-        "f" '(xref-find-definitions-other-window :which-key "defs (other window)"))
-      #+END_SRC
+
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (general-define-key
+       :prefix "C-c e"
+       "" '(nil :which-key "elixir")
+       "t" '(exunit-verify-all :which-key "test project")
+       "b" '(exunit-verify :which-key "test buffer")
+       "u" '(exunit-verify-all-in-umbrella :which-key "test umbrella")
+       "." '(exunit-verify-single :which-key "test at point")
+       "r" '(exunit-rerun :which-key "rerun last")
+       "F" '(xref-find-definitions :which-key "defs (here)")
+       "f" '(xref-find-definitions-other-window :which-key "defs (other window)")
+       "d" '(elixir-find-definition :which-key "jump to def")
+       )
+     #+END_SRC
 **** Prettify elixir symbols
      #+BEGIN_SRC emacs-lisp :tangle yes
      (defun elixir-mode-prettify-symbols-hook ()
@@ -1869,6 +1956,7 @@
 **** Add hooks
      #+BEGIN_SRC emacs-lisp :tangle yes
      (add-hook 'elixir-mode-hook 'elixir-mode-prettify-symbols-hook)
+     (add-hook 'elixir-mode-hook 'ruby-block-mode)
      (add-hook 'elixir-mode-hook
                (lambda ()
                  (set (make-variable-buffer-local 'ruby-end-expand-keywords-before-re)
@@ -1984,15 +2072,15 @@
     (use-package python-mode
       :defer
       :config
-        (setq lsp-pyls-plugins-pylint-enabled t)
+        (setq lsp-pyls-plugins-pylint-enabled nil)
         (setq lsp-pyls-plugins-pycodestyle-enabled nil)
       :hook
         (python-mode . subword-mode)
-        (python-mode .
-          (lambda ()
-            (defun py-describe-symbol nil)
-            (defun py-help-at-point nil)
-            ))
+        ;(python-mode .
+        ;  (lambda ()
+        ;    (defun py-describe-symbol nil)
+        ;    (defun py-help-at-point nil)
+        ;    ))
       :mode ("\\.py\\'" . python-mode))
     #+END_SRC
 **** Add docstring support
@@ -2003,6 +2091,33 @@
        (:map python-mode-map
          ([remap fill-paragraph] . python-docstring-fill)))
      #+END_SRC
+**** Better flycheck setup
+     Allows multiple syntax checkers to run in parallel on Python code
+     Ideal use-case: pyflakes for syntax combined with mypy for typing
+
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package flycheck-pycheckers
+       :after flycheck
+       :ensure t
+       :init
+       (with-eval-after-load 'flycheck
+         (add-hook 'flycheck-mode-hook #'flycheck-pycheckers-setup)
+         )
+       (setq flycheck-pycheckers-checkers
+         '(
+           mypy3
+           pyflakes
+           )
+         )
+       )
+     #+END_SRC
+**** Manage python projects with poetry
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (use-package poetry
+       :ensure t
+       :config
+         (poetry-tracking-mode 1))
+     #+END_SRC
 *** Nim
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package nim-mode
@@ -2012,8 +2127,18 @@
 *** Crystal
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package crystal-mode
+      :after (ruby-end)
       :defer
-      :mode ("\\.cr\\'" . crystal-mode))
+      :mode ("\\.cr\\'" . crystal-mode)
+      :config
+        (add-hook 'crystal-mode-hook 'ruby-block-mode)
+        (add-hook 'crystal-mode-hook 'ruby-end-mode))
+    #+END_SRC
+**** Add flycheck
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package flycheck-crystal
+      :after (flycheck crystal-mode)
+      :defer)
     #+END_SRC
 *** Pony
     Disabled for now as I don't use this language often.
