@@ -1347,6 +1347,14 @@
           "q" #'vr/mc-mark))
     #+END_SRC
 ** Windows
+*** Automatically balance windows when created
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (use-package balanced-windows
+      :delight
+      :defer
+      :config
+      (balanced-windows-mode))
+    #+END_SRC
 *** Use =ace-window= to move around
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package ace-window
@@ -2378,15 +2386,25 @@
    Maybe moving to =project.el= would be better.
 
    https://old.reddit.com/r/emacs/comments/b0jzy4/emacscast_8_writing_in_emacs_and_org_mode_part_1/eiiywwm/
-   https://www.reddit.com/r/emacs/comments/88v344/workspace_with_isolated_buffers_eyebrowseperspmode/
+   https://old.reddit.com/r/emacs/comments/88v344/workspace_with_isolated_buffers_eyebrowseperspmode/
 ** =dap-mode= for elixir
    https://github.com/emacs-lsp/dap-mode#elixir
+** Capture command frequency
+   to see whether anything can be removed or should be focused on
+   https://github.com/dacap/keyfreq
 ** =emacs-refactor= for elixir
    https://github.com/Wilfred/emacs-refactor
+** Improve refactor using deadgrep
+*** Don't edit paths in global search/replace
+*** "Read only" text should stay that way
 ** Remove =M-`= binding
    =M-`= brings up =tmm= which is completely useless to me, so might
    as well be remapped to something handy. Maybe iterate through
    frames/windows?
+** Window (pane) management
+*** https://github.com/ajgrf/edwina
+*** https://github.com/sabof/es-windows
+*** https://depp.brause.cc/eyebrowse/
 ** Buffer navigation
    https://github.com/joostkremers/nswbuff
 ** FIXME:
