@@ -711,6 +711,11 @@
                                       (unless (eq major-mode 'js2-mode)
                                         (rainbow-identifiers-mode)))))
     #+END_SRC
+*** Spaces
+    Make sure sneaky no-break spaces are displayed.
+    #+BEGIN_SRC emacs-lisp :tangle yes
+    (setq nobreak-char-display 0)
+    #+END_SRC
 *** Highlight trailing whitespace
     #+BEGIN_SRC emacs-lisp :tangle yes
     (setq-default show-trailing-whitespace t)
@@ -1502,11 +1507,6 @@
 ** Org-mode
 *** Tweaks
     These are tweaks to the built-in org-mode
-**** stuff
-     #+begin_#+BEGIN_SRC emacs-lisp :tangle yes
-     ?
-     #+END_SRC
-     #+end_#+BEGIN_SRC
 **** Ensure UTF-8
      #+BEGIN_SRC emacs-lisp :tangle yes
      (setq org-export-coding-system 'utf-8)
@@ -1541,15 +1541,26 @@
       #+BEGIN_SRC emacs-lisp :tangle yes
       (setq org-src-tab-acts-natively nil)
       #+END_SRC
-***** Return to the previous "easy templates"
-      #+BEGIN_SRC emacs-lisp :tangle yes
-      (require 'org-tempo)
-      #+END_SRC
+**** Add "easy templates" using =org-tempo=
+     Use =C-c C-,= to trigger.
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (require 'org-tempo)
+     #+END_SRC
 ***** Additional templates
       Org-mode has "Easy Templates", here are some additions:
       #+BEGIN_SRC emacs-lisp :tangle yes
       (add-to-list 'org-structure-template-alist
-              '("S" . "#+BEGIN_SRC emacs-lisp :tangle yes\n?\n#+END_SRC"))
+        '("sl" . "src emacs-lisp :tangle yes"))
+      (add-to-list 'org-structure-template-alist
+        '("se" . "src elixir"))
+      (add-to-list 'org-structure-template-alist
+        '("sc" . "src crystal"))
+      (add-to-list 'org-structure-template-alist
+        '("sn" . "src nim"))
+      (add-to-list 'org-structure-template-alist
+        '("sp" . "src python"))
+      (add-to-list 'org-structure-template-alist
+        '("sz" . "src zsh"))
       #+END_SRC
 **** Org-Capture
      #+BEGIN_SRC emacs-lisp :tangle yes
