@@ -224,7 +224,7 @@
     #+BEGIN_SRC emacs-lisp :tangle no
       (set-charset-priority 'unicode)
       (setq locale-coding-system   'utf-8)   ; pretty
-      (set-terminal-coding-system  'utf-8)   ; pretty
+      (set-terminal-coding-system  'utf-8-unix)   ; pretty
       (set-keyboard-coding-system  'utf-8)   ; pretty
       (set-selection-coding-system 'utf-8)   ; please
       (prefer-coding-system        'utf-8)   ; with sugar on top
@@ -528,7 +528,11 @@
      #+BEGIN_SRC emacs-lisp :tangle yes
      (use-package swiper
        :delight
-       :defer)
+       :defer
+       :general
+         ("C-s" 'swiper)
+       :init
+         (setq ivy-display-style 'fancy))
      #+END_SRC
 **** =ivy-rich=
      =ivy-rich= is a more friendly interface for ivy, providing inline help
@@ -641,19 +645,6 @@
       (defvar my-mode-line-buffer-line-count nil)
       (make-variable-buffer-local 'my-mode-line-buffer-line-count)
 
-      (setq-default mode-line-format
-                    '("  " mode-line-modified
-                      (list 'line-number-mode "  ")
-                      (:eval (when line-number-mode
-                               (let ((str "L%l"))
-                                 (when (and (not (buffer-modified-p)) my-mode-line-buffer-line-count)
-                                   (setq str (concat str "/" my-mode-line-buffer-line-count)))
-                                 str)))
-                      "  %p"
-                      (list 'column-number-mode "  C%c")
-                      "  " mode-line-buffer-identification
-                      "  " mode-line-modes))
-
       (defun my-mode-line-count-lines ()
         (setq my-mode-line-buffer-line-count (int-to-string (count-lines (point-min) (point-max)))))
 
@@ -662,6 +653,22 @@
       (add-hook 'after-revert-hook 'my-mode-line-count-lines)
       (add-hook 'dired-after-readin-hook 'my-mode-line-count-lines)
     #+END_SRC
+*** Make the modeline more minimal
+    #+begin_src emacs-lisp :tangle yes
+    (use-package feebleline
+      :config
+        (setq feebleline-msg-functions
+              '((feebleline-line-number         :pre "" :post "" :fmt "%5s")
+                (my-mode-line-count-lines       :pre "[" :post "]" :fmt "%-2s")
+                (feebleline-column-number       :pre ":" :fmt "%-2s")
+                (feebleline-file-directory      :face feebleline-dir-face :post "")
+                (feebleline-file-or-buffer-name :face font-lock-keyword-face :post "")
+                (feebleline-file-modified-star  :face font-lock-warning-face :post "")
+                (feebleline-git-branch          :face feebleline-git-face :pre " : ")
+                (feebleline-project-name        :align right)))
+      :hook
+        (after-init . feebleline-mode))
+    #+end_src
 ** Highlights
 *** Indentation
     Note: using =:hooks= keyword causes issues because this is a minor-mode.
@@ -711,34 +718,30 @@
                                       (unless (eq major-mode 'js2-mode)
                                         (rainbow-identifiers-mode)))))
     #+END_SRC
-*** Spaces
-    Make sure sneaky no-break spaces are displayed.
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (setq nobreak-char-display 0)
-    #+END_SRC
+*** Bad spaces
+**** Show bad whitespace
+     #+begin_src emacs-lisp :tangle yes
+     (setq whitespace-style '(face lines-tail
+                              trailing space-before-tab
+                              indentation empty space-after-tab))
+     #+end_src
+**** Make sure sneaky no-break spaces are displayed.
+     #+BEGIN_SRC emacs-lisp :tangle yes
+     (setq nobreak-char-display 0)
+     #+END_SRC
 *** Highlight trailing whitespace
     #+BEGIN_SRC emacs-lisp :tangle yes
-    (setq-default show-trailing-whitespace t)
+    (dolist (hook '(prog-mode-hook
+                    text-mode-hook))
+      (add-hook hook
+        (lambda () (setq show-trailing-whitespace t))))
     #+END_SRC
-**** Disable for certain modes & minibuffer
-     Certain modes, like =shell-mode=, and the minibuffer tend to
-     leave trailing space that is annoying to see.
-     #+BEGIN_SRC emacs-lisp :tangle yes
-     (dolist (hook '(special-mode-hook
-                     term-mode-hook
-                     comint-mode-hook
-                     compilation-mode-hook
-                     minibuffer-setup-hook))
-       (add-hook hook
-         (lambda () (setq show-trailing-whitespace nil))))
-     #+END_SRC
 *** Lines that go over 80 chars for prog/web modes
     #+BEGIN_SRC emacs-lisp :tangle yes
       (defun my/load-whitespace ()
         (require 'whitespace)
         (setq whitespace-line-column 80) ;; limit line length
-        (setq whitespace-style '(face lines-tail))
-        (global-whitespace-mode +1))
+        (whitespace-mode +1))
 
       (add-hook 'prog-mode-hook 'my/load-whitespace)
       (add-hook 'web-mode-hook 'my/load-whitespace)
@@ -775,6 +778,7 @@
       (lambda () (global-prettify-symbols-mode +1)))
     #+END_SRC
 *** Change cursor dynamically, depending on the context
+    This is so that the cursor displays red for read-only buffers.
     #+BEGIN_SRC emacs-lisp :tangle yes
     (use-package cursor-chg
       :init
@@ -969,11 +973,11 @@
     #+BEGIN_SRC emacs-lisp :tangle yes
     (general-define-key
       :keymaps 'goto-map
-      "c" 'avy-goto-char-timer
-      "[" 'beginning-of-buffer
-      "]" 'end-of-buffer
-      "'" '("previous points" . pop-global-mark)
-      "." '("previous M-. tag" . pop-tag-mark))
+      "<up>" 'beginning-of-buffer
+      "<down>" 'end-of-buffer
+      "<left>" '("previous points" . pop-global-mark)
+      "." '("previous M-. tag" . pop-tag-mark)
+      )
     #+END_SRC
 
     And now let's bind =C-;=, a more comfortable key combo which is
@@ -1009,9 +1013,12 @@
        :delight
        :general
          (:keymaps 'goto-map
+          ";" 'avy-goto-char
+          "C-;" 'avy-goto-char-2
           "c" 'avy-goto-char-timer
           "w" 'avy-goto-word-1
-          "l" 'avy-goto-line)
+          "l" 'avy-goto-line
+          )
        :config (setq avy-all-windows nil))
      #+END_SRC
 *** Jump back to the last edit
@@ -1243,6 +1250,14 @@
     (general-define-key (kbd "M-u") 'upcase-dwim)
     (general-define-key (kbd "M-l") 'downcase-dwim)
     #+END_SRC
+*** Replace =zap-to-char= with =avy-zap=
+    #+begin_src emacs-lisp :tangle yes
+    (use-package avy-zap
+      :general
+        ("M-z" 'avy-zap-to-char-dwim)
+        ("M-Z" 'avy-zap-up-to-char-dwim)
+      )
+    #+end_src
 ** Spelling
 *** =flyspell-correct-ivy=
     flyspell-correct is a package for distraction-free words
@@ -1284,7 +1299,7 @@
         (advice-add #'deadgrep-edit-mode :after #'config-editing--on-enter-deadgrep-edit-mode)
         (advice-add #'deadgrep-mode :before #'config-editing--on-exit-deadgrep-edit-mode))
 
-    (general-def
+    (general-define-key
       :keymaps 'deadgrep-mode-map
       "e" 'deadgrep-edit-mode
       ;; TODO: find some way to trigger these (push-button?)
@@ -1295,7 +1310,7 @@
       ;; "s" 'deadgrep--search-term
       )
 
-    (general-def
+    (general-define-key
       :keymaps 'deadgrep-edit-mode-map
       "<escape>" 'deadgrep-mode)
     #+END_SRC
@@ -1319,23 +1334,6 @@
       :init
       (setq synosaurus-backend 'synosaurus-backend-wordnet
             synosaurus-choose-method 'popup))
-    #+END_SRC
-*** =ace-isearch=
-    A minor mode which combines =isearch=, =avy= and =swiper=.
-
-    I have this configured to skip isearch and go from avy to swiper.
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (use-package ace-isearch
-      :defer
-      :delight
-      :config
-        (custom-set-variables
-          '(ace-isearch-input-length 2)
-          '(ace-isearch-jump-delay 1)
-          '(ace-isearch-function 'avy-goto-char)
-          '(ace-isearch-use-jump 'printing-char)))
-
-    (add-hook 'emacs-startup-hook (lambda () (global-ace-isearch-mode +1)))
     #+END_SRC
 *** Visual regexp
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1399,6 +1397,77 @@
       (winner-mode 1))
     (add-hook 'emacs-startup-hook 'my/load-winner-mode)
     #+END_SRC
+*** Better splitting defaults
+**** Try to reuse existing windows where possible
+     #+begin_src emacs-lisp :tangle yes
+     (setq display-buffer-alist
+       '((".*" (display-buffer-reuse-window display-buffer-same-window))))
+     #+end_src
+**** Try to reuse windows in other frames
+     #+begin_src emacs-lisp :tangle yes
+     (setq display-buffer-reuse-frames t)
+     #+end_src
+**** Avoid resizing the display-buffer if possible
+     #+begin_src emacs-lisp :tangle yes
+     (setq even-window-sizes nil)
+     #+end_src
+*** Better split functionality
+**** Function which prefers a "horizontal" split
+     #+begin_src emacs-lisp :tangle yes
+     (defun split-window-sensibly-prefer-horizontal (&optional window)
+     "Based on split-window-sensibly, but designed to prefer a horizontal split,
+     i.e. windows tiled side-by-side."
+       (let ((window (or window (selected-window))))
+         (or (and (window-splittable-p window t)
+              ;; Split window horizontally
+              (with-selected-window window
+                (split-window-right)))
+         (and (window-splittable-p window)
+              ;; Split window vertically
+              (with-selected-window window
+                (split-window-below)))
+         (and
+              ;; If WINDOW is the only usable window on its frame (it is
+              ;; the only one or, not being the only one, all the other
+              ;; ones are dedicated) and is not the minibuffer window, try
+              ;; to split it horizontally disregarding the value of
+              ;; `split-height-threshold'.
+              (let ((frame (window-frame window)))
+                (or
+                 (eq window (frame-root-window frame))
+                 (catch 'done
+                   (walk-window-tree (lambda (w)
+                                       (unless (or (eq w window)
+                                                   (window-dedicated-p w))
+                                         (throw 'done nil)))
+                                     frame)
+                   t)))
+          (not (window-minibuffer-p window))
+          (let ((split-width-threshold 0))
+            (when (window-splittable-p window t)
+              (with-selected-window window
+               (split-window-right))))))))
+     #+end_src
+**** Function which provides a new "sensible" split
+     # Adding a fake paren here to fix highlighting in org-mode (
+     #+begin_src emacs-lisp :tangle yes
+     (defun split-window-really-sensibly (&optional window)
+       (let ((window (or window (selected-window))))
+         (if (> (window-total-width window) (* 2 (window-total-height window)))
+             (with-selected-window window (split-window-sensibly-prefer-horizontal window))
+             (with-selected-window window (split-window-sensibly window)))))
+     #+end_src
+**** Configure preferences
+     #+begin_src emacs-lisp :tangle yes
+     (setq
+       split-height-threshold 4
+       split-width-threshold 40
+       split-window-preferred-function 'split-window-really-sensibly)
+     #+end_src
+*** Add ability to "rotate" layouts and windows
+    #+begin_src emacs-lisp :tangle yes
+    (use-package rotate)
+    #+end_src
 ** Version Control
 *** Highlight diff in fringe
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1504,6 +1573,112 @@
      (advice-add 'magit-whitespace-disallowed :around
        (lambda (orig-fun &rest args) (interactive) (insert "-")))
      #+END_SRC
+**** =magit-log= date headers
+     #+begin_src emacs-lisp :tangle yes
+     ;;; fix syntax highlighting: <(
+     (use-package ov
+       :config
+         (defun unpackaged/magit-log--add-date-headers (&rest _ignore)
+           "Add date headers to Magit log buffers."
+           (when (derived-mode-p 'magit-log-mode)
+             (save-excursion
+               (ov-clear 'date-header t)
+               (goto-char (point-min))
+               (cl-loop with last-age
+                        for this-age = (-some--> (ov-in 'before-string 'any (line-beginning-position) (line-end-position))
+                                                 car
+                                                 (overlay-get it 'before-string)
+                                                 (get-text-property 0 'display it)
+                                                 cadr
+                                                 (s-match (rx (group (1+ digit) ; number
+                                                                     " "
+                                                                     (1+ (not blank))) ; unit
+                                                              (1+ blank) eos)
+                                                          it)
+                                                 cadr)
+                        do (when (and this-age
+                                      (not (equal this-age last-age)))
+                             (ov (line-beginning-position) (line-beginning-position)
+                                 'after-string (propertize (concat " " this-age "\n")
+                                                           'face 'magit-section-heading)
+                                 'date-header t)
+                             (setq last-age this-age))
+                        do (forward-line 1)
+                        until (eobp)))))
+
+         (define-minor-mode unpackaged/magit-log-date-headers-mode
+           "Display date/time headers in `magit-log' buffers."
+           :global t
+           (if unpackaged/magit-log-date-headers-mode
+               (progn
+                 ;; Enable mode
+                 (add-hook 'magit-post-refresh-hook #'unpackaged/magit-log--add-date-headers)
+                 (advice-add #'magit-setup-buffer-internal :after #'unpackaged/magit-log--add-date-headers))
+             ;; Disable mode
+             (remove-hook 'magit-post-refresh-hook #'unpackaged/magit-log--add-date-headers)
+             (advice-remove #'magit-setup-buffer-internal #'unpackaged/magit-log--add-date-headers)))
+     )
+     #+end_src
+** Dired
+*** Set listing switches
+    #+begin_src emacs-lisp :tangle yes
+    (setq dired-listing-switches "-alh")
+    #+end_src
+*** Collapse paths like Github does
+    #+begin_src emacs-lisp :tangle yes
+    (use-package dired-collapse
+      :defer
+      :commands (dired-collapse-mode)
+      :init
+        (add-hook 'dired-mode-hook #'dired-collapse-mode))
+    #+end_src
+*** Allow filename editing directly in the buffer
+    #+begin_src emacs-lisp :tangle yes
+    (use-package dired-efap
+      :general
+        (:keymaps 'dired-mode-map
+         "r" 'dired-efap))
+    #+end_src
+*** Add archive browsing
+    #+begin_src emacs-lisp :tangle yes
+    (use-package dired-avfs)
+    #+end_src
+*** Provide better listing similar to =k= and =ll=
+    #+begin_src emacs-lisp :tangle yes
+    (use-package dired-k
+      :config
+        (setq dired-k-human-readable 1
+              dired-k-padding 1)
+        (add-hook 'dired-mode-hook 'dired-k)
+        (add-hook 'dired-after-readin-hook #'dired-k-no-revert))
+    #+end_src
+*** Colorise the files based on type/extensions
+    #+begin_src emacs-lisp :tangle yes
+    (use-package dired-rainbow
+      :config
+      (progn
+        (dired-rainbow-define-chmod directory "#6cb2eb" "d.*")
+        (dired-rainbow-define html "#eb5286" ("css" "less" "sass" "scss" "htm" "html" "jhtm" "mht" "eml" "mustache" "xhtml"))
+        (dired-rainbow-define xml "#f2d024" ("xml" "xsd" "xsl" "xslt" "wsdl" "bib" "json" "msg" "pgn" "rss" "yaml" "yml" "rdata"))
+        (dired-rainbow-define document "#9561e2" ("docm" "doc" "docx" "odb" "odt" "pdb" "pdf" "ps" "rtf" "djvu" "epub" "odp" "ppt" "pptx"))
+        (dired-rainbow-define markdown "#ffed4a" ("org" "etx" "info" "markdown" "md" "mkd" "nfo" "pod" "rst" "tex" "textfile" "txt"))
+        (dired-rainbow-define database "#6574cd" ("xlsx" "xls" "csv" "accdb" "db" "mdb" "sqlite" "nc"))
+        (dired-rainbow-define media "#de751f" ("mp3" "mp4" "MP3" "MP4" "avi" "mpeg" "mpg" "flv" "ogg" "mov" "mid" "midi" "wav" "aiff" "flac"))
+        (dired-rainbow-define image "#f66d9b" ("tiff" "tif" "cdr" "gif" "ico" "jpeg" "jpg" "png" "psd" "eps" "svg"))
+        (dired-rainbow-define log "#c17d11" ("log"))
+        (dired-rainbow-define shell "#f6993f" ("awk" "bash" "bat" "sed" "sh" "zsh" "vim"))
+        (dired-rainbow-define interpreted "#38c172" ("py" "ipynb" "rb" "pl" "t" "msql" "mysql" "pgsql" "sql" "r" "clj" "cljs" "scala" "js"))
+        (dired-rainbow-define compiled "#4dc0b5" ("asm" "cl" "lisp" "el" "c" "h" "c++" "h++" "hpp" "hxx" "m" "cc" "cs" "cp" "cpp" "go" "f" "for" "ftn" "f90" "f95" "f03" "f08" "s" "rs" "hi" "hs" "pyc" ".java"))
+        (dired-rainbow-define executable "#8cc4ff" ("exe" "msi"))
+        (dired-rainbow-define compressed "#51d88a" ("7z" "zip" "bz2" "tgz" "txz" "gz" "xz" "z" "Z" "jar" "war" "ear" "rar" "sar" "xpi" "apk" "xz" "tar"))
+        (dired-rainbow-define packaged "#faad63" ("deb" "rpm" "apk" "jad" "jar" "cab" "pak" "pk3" "vdf" "vpk" "bsp"))
+        (dired-rainbow-define encrypted "#ffed4a" ("gpg" "pgp" "asc" "bfe" "enc" "signature" "sig" "p12" "pem"))
+        (dired-rainbow-define fonts "#6cb2eb" ("afm" "fon" "fnt" "pfb" "pfm" "ttf" "otf"))
+        (dired-rainbow-define partition "#e3342f" ("dmg" "iso" "bin" "nrg" "qcow" "toast" "vcd" "vmdk" "bak"))
+        (dired-rainbow-define vc "#0074d9" ("git" "gitignore" "gitattributes" "gitmodules"))
+        (dired-rainbow-define-chmod executable-unix "#38c172" "-.*x.*")
+    ))
+    #+end_src
 ** Org-mode
 *** Tweaks
     These are tweaks to the built-in org-mode
@@ -1675,7 +1850,6 @@
          (setq org-bullets-bullet-list '("☰" "☷" "▶" "◆" "●" "✸"))
          (add-hook 'org-mode-hook #'org-bullets-mode))
      #+END_SRC
-
 ** Utility functions
    This section contains generally useful functions.
 *** Paths & Dirs
@@ -1726,7 +1900,7 @@
           "j b" 'dumb-jump-back
           "j o" 'dumb-jump-go-other-window)
        :config
-        (setq dumb-jump-selector 'ivy
+        (setq dumb-jump-selector 'swiper
               dumb-jump-prefer-searcher 'rg
               dumb-jump-default-project "~/Projects"))
       #+END_SRC
@@ -2133,9 +2307,8 @@
 **** Manage python projects with poetry
      #+BEGIN_SRC emacs-lisp :tangle yes
      (use-package poetry
-       :ensure t
-       :config
-         (poetry-tracking-mode 1))
+       :defer
+       :hook (python-mode . (lambda () (poetry-tracking-mode 1))))
      #+END_SRC
 *** Nim
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -2416,6 +2589,7 @@
 *** https://github.com/ajgrf/edwina
 *** https://github.com/sabof/es-windows
 *** https://depp.brause.cc/eyebrowse/
+*** https://github.com/mina86/auto-dim-other-buffers.el/
 ** Buffer navigation
    https://github.com/joostkremers/nswbuff
 ** FIXME:

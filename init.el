@@ -5,6 +5,8 @@
 ;;; init file which exports a config file from an
 ;;; Org file containing custom settings for Emacs
 
+;;; Code:
+
 ;; Hide the startup message
 (setq inhibit-startup-message t)
 

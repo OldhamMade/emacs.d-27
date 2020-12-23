@@ -12,12 +12,14 @@
       ;; don't add that `custom-set-variables' block to my init.el!
       package--init-file-ensured t)
 
-(tool-bar-mode 0)
-(menu-bar-mode 0)
-(scroll-bar-mode 0)
-(tooltip-mode 0)
+(tool-bar-mode -1)
+(menu-bar-mode -1)
+(scroll-bar-mode -1)
+(tooltip-mode -1)
+(blink-cursor-mode -1)
 
 (setq visible-bell nil
+      ring-bell-function 'ignore
       initial-scratch-message nil
       message-log-max 512
       debug-on-error t)
