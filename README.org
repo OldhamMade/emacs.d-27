@@ -961,6 +961,43 @@
         ))
     #+END_SRC
 
+*** Better ibuffer listing
+    #+begin_src emacs-lisp :tangle yes
+    ;; fix syntax highlighting ((
+    (use-package ibuffer-vc
+      :hook
+        (ibuffer-hook . (lambda ()
+          (ibuffer-vc-set-filter-groups-by-vc-root)
+          (unless (eq ibuffer-sorting-mode 'filename/process)
+            (ibuffer-do-sort-by-filename/process))))
+      :config
+        (define-ibuffer-column size-h
+          (:name "Size" :inline t)
+          (cond
+           ((> (buffer-size) 1000000) (format "%7.1fM" (/ (buffer-size) 1000000.0)))
+           ((> (buffer-size) 1000) (format "%7.1fk" (/ (buffer-size) 1000.0)))
+           (t (format "%8d" (buffer-size)))))
+        (setq ibuffer-formats
+          '((mark modified read-only vc-status-mini " "
+              (name 18 18 :left :elide)
+              " "
+              (size-h 9 -1 :right)
+              " "
+              (mode 16 16 :left :elide)
+              " "
+              filename-and-process)
+            (mark modified read-only vc-status-mini " "
+              (name 18 18 :left :elide)
+              " "
+              (size-h 9 -1 :right)
+              " "
+              (mode 16 16 :left :elide)
+              " "
+              (vc-status 16 16 :left)
+              " "
+              filename-and-process)))
+              )
+    #+end_src
 ** Moving around
 *** Enable subword mode
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1847,7 +1884,7 @@
        :after org
        :defer
        :init
-         (setq org-bullets-bullet-list '("☰" "☷" "▶" "◆" "●" "✸"))
+         (setq org-bullets-bullet-list '("☰" "☷" "▶" "●" "✱" "✲" "✸" "⦿" "⌾" "◦"))
          (add-hook 'org-mode-hook #'org-bullets-mode))
      #+END_SRC
 ** Utility functions
@@ -2308,6 +2345,7 @@
      #+BEGIN_SRC emacs-lisp :tangle yes
      (use-package poetry
        :defer
+       :init (setq poetry-tracking-strategy 'projectile)
        :hook (python-mode . (lambda () (poetry-tracking-mode 1))))
      #+END_SRC
 *** Nim
@@ -2592,6 +2630,11 @@
 *** https://github.com/mina86/auto-dim-other-buffers.el/
 ** Buffer navigation
    https://github.com/joostkremers/nswbuff
+** Scroll on jump
+   For better 
+   https://github.com/emacsmirror/scroll-on-jump
+*** Or alternatively, just keep the cursor centered
+    https://github.com/andre-r/centered-cursor-mode.el
 ** FIXME:
 *** multiple cursors
 **** https://github.com/dhodges/dotfiles/blob/f808e22a2e47133a0fab549db63241a516cf523c/.emacs.d/dh-lisp/dh-packages.el#L276
