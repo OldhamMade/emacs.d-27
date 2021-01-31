@@ -7,13 +7,6 @@
 
 ;;; Code:
 
-;; Hide the startup message
-(setq inhibit-startup-message t)
-
-;; FIXME - this should be in config.org,
-;; but doesn't work there
-(setq disabled-command-hook nil)
-
 ;; Stop writing customisations to init.el
 (setq custom-file (expand-file-name "custom.el" user-emacs-directory))
 
@@ -28,8 +21,6 @@
                          ("melpa" . "https://melpa.org/packages/")
                          ("org" . "https://orgmode.org/elpa/")))
 
-(setq tls-checktrust t)
-(setq gnutls-verify-error t)
 
 (defvar bootstrap-version)
 (let ((bootstrap-file
@@ -46,10 +37,6 @@
 
 ;; straight.el tuning
 (straight-use-package 'use-package)
-(setq straight-use-package-by-default 1
-      straight-cache-autoloads t
-      straight-enable-use-package-integration t
-      straight-check-for-modifications '(check-on-save find-when-checking))
 
 ;; tangle the README.org into a config file
 (let ((file-name-handler-alist nil))
