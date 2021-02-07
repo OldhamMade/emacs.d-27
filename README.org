@@ -668,94 +668,50 @@
     #+END_SRC
 ** Modeline
 *** Use =mini-modeline=
-    #+begin_src emacs-lisp :tangle no
+    #+begin_src emacs-lisp :tangle yes
     (use-package mini-modeline
+      :init
+        (setq mini-modeline-r-format
+          (list
+            ; Modified?
+            '(:eval (when (buffer-modified-p)
+              (propertize "*"
+                'help-echo "Buffer has been modified"
+                'face 'font-lock-warning-face)))
+            ; Read only?
+            '(:eval (when buffer-read-only
+              (propertize "!"
+                'help-echo "Buffer is read-only"
+                'face 'font-lock-type-face)))
+            ; Current filename
+            '(:eval (propertize " %b" 'help-echo (buffer-file-name)))
+            ; Current git branch
+            ;'(:eval (propertize '(vc-mode vc-mode)
+            ;  'face 'git-commit-comment-file-face))
+            '(vc-mode vc-mode)
+            '(:eval (propertize projectile--mode-line
+              'help-echo "Current project"
+              'face 'font-lock-keyword-face))
+            " "
+            ; Current line and column
+            (propertize "%l:%c" 'help-echo "Line and column index")
+            ; Total lines
+            '(:eval (propertize (format "[%s]" (or my/mode-line-buffer-line-count "?"))
+              'help-echo "Total lines"
+              'face 'compilation-line-number))
+            ))
       :config
         (mini-modeline-mode t)
       :custom
+        (mini-modeline-echo-duration 3)
+        (mini-modeline-right-padding 1)
+        (mini-modeline-enhance-visual nil)
+      :custom-face
         (mini-modeline-face-attr `(:background ,(face-attribute 'default :background)))
-        (mini-modeline-echo-duration 1)
-        (mini-modeline-l-format
-        '(:eval (string-trim-left (or (my/mode-line-buffer-name) ""))))
-        (mini-modeline-r-format
-        '(:eval (concat
-            (my/mode-line-buffer-modified)
-            (my/mode-line-readonly)
-            (my/mode-line-line-column)
-            (my/mode-line-input-method)
-            (my/mode-line-line-encoding)
-            (my/mode-line-buffer-encoding)
-            (my/mode-line-indent-mode)
-            (my/mode-line-mode-name)
-            (my/mode-line-git-branch)
-            my--mode-line-lsp
-            my--mode-line-flymake
-            (my/mode-line-flycheck)
-            (my/mode-line-structural))))
-    )
+        ;(mini-modeline-mode-line ((t (:background "#FFFFFF" :box nil :height 0.1))))
+        ;(mini-modeline-mode-line-inactive ((t (:background "#EEEEEE" :box nil :height 0.1))))
+        )
     #+end_src
-*** Define custom =mini-modeline= functions
-     #+begin_src emacs-lisp :tangle no
- (defun my/mode-line-buffer-name ()
-   (when-let ((name (buffer-file-name)))
-     (concat
- "  "
-      (if-let ((project (or modeline-project-cache (project-current))))
-          (progn (setq-local modeline-project-cache project)
-                 (string-trim-left (abbreviate-file-name name)
-                                   (car (project-roots project))))
-        (abbreviate-file-name name)))))
-(defun my/mode-line-buffer-modified ()
-  (when (and buffer-file-name (buffer-modified-p))
-    (concat
-"  "
-     (propertize "[*]"
-       'help-echo (concat (buffer-name) " has unsaved changes")))))
-(defun my/mode-line-readonly ()
-  (when (and buffer-read-only
-             (not (memq major-mode '(vterm-mode
-                                     treemacs-mode
-                                     xref--xref-buffer-mode
-                                     magit-status-mode))))
-    (concat
-"  "
-     (propertize
-      "RO"
-      'help-echo "Make file writable"
-      'local-map (doto (make-sparse-keymap)
-                   (define-key [mode-line mouse-1] 'mode-line-toggle-read-only))))))
-     #+end_src
-*** examples
-    #+begin_src emacs-lisp :tangle no
-(use-package mini-modeline
-:straight (mini-modeline :repo "kiennq/emacs-mini-modeline" :host github)
-:custom
-	(mini-modeline-face-attr `(:background ,(face-attribute 'default :background)))
-	(mini-modeline-echo-duration 1)
-  (setq mini-modeline-l-format (list
-"%* "  ;; modified marker
-"%b "  ;; buffer name
-"[%m] "  ;; mode
-"%l (%p)"  ;; line position
-				)
-	mini-modeline-display-gui-line nil
-	mini-modeline-right-padding 1
-	mini-modeline-enhance-visual nil
-	)
-:config
-        (mini-modeline-mode t))
-    #+end_src
-
-(mini-modeline-r-format
-	 '((:eval (if (file-remote-p default-directory) "[R] " " "))
-		 (:eval (if-let ((proj (project-current))
-                     vc-mode)
-                (concat "["
-                        (file-name-nondirectory (directory-file-name (cdr proj)))
-"::"
-                        (substring-no-properties vc-mode 5)
-"] ")))
-		 (:eval (mode-line-buf-name))))
 *** Ensure buffer names are unique
     #+BEGIN_SRC emacs-lisp :tangle no
       (defun my/load-uniquify ()
@@ -765,34 +721,19 @@
       (add-hook 'emacs-startup-hook 'my/load-uniquify)
     #+END_SRC
 *** Display total lines in file
-    #+BEGIN_SRC emacs-lisp :tangle no
-      (defvar my-mode-line-buffer-line-count nil)
-      (make-variable-buffer-local 'my-mode-line-buffer-line-count)
+    #+BEGIN_SRC emacs-lisp :tangle yes
+      (defvar my/mode-line-buffer-line-count nil)
+      (make-variable-buffer-local 'my/mode-line-buffer-line-count)
 
-      (defun my-mode-line-count-lines ()
-        (setq my-mode-line-buffer-line-count (int-to-string (count-lines (point-min) (point-max)))))
+      (defun my/mode-line-count-lines ()
+        (setq my/mode-line-buffer-line-count (int-to-string (count-lines (point-min) (point-max)))))
 
-      (add-hook 'find-file-hook 'my-mode-line-count-lines)
-      (add-hook 'after-save-hook 'my-mode-line-count-lines)
-      (add-hook 'after-revert-hook 'my-mode-line-count-lines)
-      (add-hook 'dired-after-readin-hook 'my-mode-line-count-lines)
+      (add-hook 'after-init-hook 'my/mode-line-count-lines)
+      (add-hook 'find-file-hook 'my/mode-line-count-lines)
+      (add-hook 'after-save-hook 'my/mode-line-count-lines)
+      (add-hook 'after-revert-hook 'my/mode-line-count-lines)
+      (add-hook 'dired-after-readin-hook 'my/mode-line-count-lines)
     #+END_SRC
-*** Make the modeline more minimal
-    #+begin_src emacs-lisp :tangle no
-    (use-package feebleline
-      :config
-        (setq feebleline-msg-functions
-              '((feebleline-line-number         :pre "" :post "" :fmt "%5s")
-                (my-mode-line-count-lines       :pre "[" :post "]" :fmt "%-2s")
-                (feebleline-column-number       :pre ":" :fmt "%-2s")
-                (feebleline-file-directory      :face feebleline-dir-face :post "")
-                (feebleline-file-or-buffer-name :face font-lock-keyword-face :post "")
-                (feebleline-file-modified-star  :face font-lock-warning-face :post "")
-                (feebleline-git-branch          :face feebleline-git-face :pre " : ")
-                (feebleline-project-name        :align right)))
-      :hook
-        (emacs-startup-hook . feebleline-mode))
-    #+end_src
 ** Highlights
 *** Indentation
     Note: using =:hooks= keyword causes issues because this is a minor-mode.
@@ -1188,6 +1129,7 @@
        :defer
        :delight
        :general
+         ("C-." #'avy-goto-char)
          (:keymaps 'goto-map
           ";" 'avy-goto-char
           "C-;" 'avy-goto-char-2
@@ -1916,6 +1858,13 @@
      #+BEGIN_SRC emacs-lisp :tangle no
      (setq org-export-coding-system 'utf-8)
      #+END_SRC
+**** Hide emphasis markers
+     Wit this option enabled, markers like =, /, * are hidden
+     which makes for a neater view.
+
+     #+begin_src emacs-lisp :tangle yes
+     (setq org-hide-emphasis-markers t)
+     #+end_src
 **** Enable shift-selection
      Standard Emacs =S-<cursor>= commands conflict with Org’s use of
      =S-<cursor>= to change timestamps, TODO keywords, priorities, and
@@ -1975,6 +1924,9 @@
      (defvar my-org-capture-directory
        (expand-file-name "~/Dropbox/org")
        "Location for all org-mode capture files.")
+     (defvar my-org-blog-directory
+       (expand-file-name "~/Dropbox/blog/content-org")
+       "Location for all org-mode capture files.")
      #+END_SRC
 ***** =doct=: Declarative Org Capture Templates
       #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1982,8 +1934,8 @@
         :defer
         :delight
         :after org
-        :init (setq org-capture-templates '())
-        :config
+        :init 
+          (setq org-capture-templates '())
           (setq til-categories
             '(
                ("Ack" "a")
@@ -2006,6 +1958,7 @@
               ("iOS App" "i")
               ("macOS App" "m")
               ))
+        :hook (emacs-startup . (lambda ()
           (setq org-capture-templates
             (doct `(:group
              :empty-lines 1
@@ -2024,15 +1977,15 @@
                  :template "* TODO %^{taskname}\n %a\n")))
               ("Blog"
                :keys "b"
-               :file ,(expand-file-name "blog.org"  my-org-capture-directory)
+               :file ,(expand-file-name "posts.org"  my-org-blog-directory)
                :type entry
-               :template "* TODO %^{name}\n  %i%?\n  %a"
+               :template "* TODO %^{name}   :%^{tags}:\n  :PROPERTIES:\n  :EXPORT_DATE: %u\n  :EXPORT_FILE_NAME: %^{slug}.md\n  :END:\n  \n  %i%?"
               )
               ("TIL"
                :keys "l"
-               :file ,(expand-file-name "til.org"  my-org-capture-directory)
+               :file ,(expand-file-name "til.org"  my-org-blog-directory)
                :type entry
-               :template "* TODO %^{name}\n  %i%?\n  %a"
+               :template "* TODO %^{name}   :%^{tags}:\n  :PROPERTIES:\n  :EXPORT_DATE: %u\n  :EXPORT_FILE_NAME: %^{slug}.md\n  :END:\n  \n  %i%?"
                :children ,(cl-loop for (key value) in (sort til-categories (lambda (a b) (string< (car a) (car b))))
                    collect (list key :keys value :headline key))
               )
@@ -2040,7 +1993,7 @@
                :keys "i"
                :file ,(expand-file-name "project-ideas.org"  my-org-capture-directory)
                :type entry
-               :template "* TODO %^{name}\n  %i%?\n  %a"
+               :template "* TODO %^{name}\n  %i%?\n  "
                :children ,(cl-loop for (key value) in (sort idea-categories (lambda (a b) (string< (car a) (car b))))
                    collect (list key :keys value :headline key))
               )
@@ -2069,7 +2022,7 @@
                           ("optimization"  :keys "o" :headline "Optimizations")
                           ("miscellaneous" :keys "m" :headline "Miscellaneous")
                           ("security"      :keys "s" :headline "Security")))))
-          )))
+          )))))
         #+END_SRC
 *** Packages
 **** Replace Org's bullets with something less noisy
@@ -2081,6 +2034,11 @@
          (setq org-bullets-bullet-list '("☰" "☷" "▶" "●" "✱" "✲" "✸" "⦿" "⌾" "◦"))
        :hook (org-mode . org-bullets-mode))
      #+END_SRC
+*** Blogging
+    #+begin_src emacs-lisp :tangle yes
+    (use-package ox-hugo
+      :after (:all org ox))
+    #+end_src
 ** Utility functions
    This section contains generally useful functions.
 *** Paths & Dirs
@@ -2711,6 +2669,39 @@
       :delight
       :mode ("\\.feature$" . feature-mode))
     #+END_SRC
+** Integrations
+*** Harvest (time tracking)
+    Bound to =C-c t= for "time".
+
+    Use =c= to start a new timer, then =s= to stop it, 
+    and finally =t= to edit the time entry at that point.
+
+    =g=: refresh the list
+    =n/p=: next/previous entry
+    =f/b=: Go to next/previous day
+    =q=: bury buffer
+    =d=: change date (=Y-M-D= or =Y.M.D=, or use =+/-D=)
+
+    Expects that =~/.authinfo= will contain an entry for Harvest.
+
+    #+begin_src emacs-lisp :tangle yes
+    (use-package reaper
+      :defer
+      :delight
+      :init (require 'auth-source)
+      :general ("C-c t" #'reaper)
+      :config
+        (setq reaper-account-id (my-username "id.getharvest.com"))
+        (setq reaper-api-key  (my-password "id.getharvest.com"))
+        )
+    #+end_src
+**** Define the password functions
+     #+begin_src emacs-lisp :tangle yes
+     (defun my-username (host)
+       (nth 0 (auth-source-user-and-password host)))
+     (defun my-password (host)
+       (nth 1 (auth-source-user-and-password host)))
+     #+end_src
 ** Terminal
 *** Multi-term
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -2861,6 +2852,9 @@
    https://github.com/emacsmirror/scroll-on-jump
 *** Or alternatively, just keep the cursor centered
     https://github.com/andre-r/centered-cursor-mode.el
+** Coverage
+   Display coverage inline
+   https://github.com/trezona-lecomte/coverage
 ** FIXME:
 *** multiple cursors
 **** https://github.com/dhodges/dotfiles/blob/f808e22a2e47133a0fab549db63241a516cf523c/.emacs.d/dh-lisp/dh-packages.el#L276
