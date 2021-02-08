@@ -841,18 +841,36 @@
       (lambda () (global-prettify-symbols-mode +1)))
     #+END_SRC
 *** Change cursor dynamically, depending on the context
-    This is so that the cursor displays red for read-only buffers.
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (use-package cursor-chg
-      :delight
-      :defer
-      :init
-        (setq curchg-default-cursor-type 'box
-              curchg-idle-cursor-type 'hollow
-              curchg-default-cursor-color "white"
-              curchg-input-method-cursor-color "red")
-      :hook (emacs-startup . change-cursor-mode))
-    #+END_SRC
+    I was previously using =cursor-chg= to change the cursor color
+    dynamically, but I found that it can cause some serious lag while
+    typing, to the point where I would be waiting for a second or two
+    for the sentence I'd just written to display at all.
+
+    This is a small snippet I found which works the same way but
+    without the performance penalty.
+
+    Display the cursor as grey for read-only buffers, red when in
+    overwrite mode, or white otherwise.
+
+    #+begin_src emacs-lisp :tangle yes
+    (setq my/set-cursor-color-color "")
+    (setq my/set-cursor-color-buffer "")
+    (defun my/set-cursor-color-according-to-mode ()
+      "change cursor color according to some minor modes."
+      ;; set-cursor-color is somewhat costly, so we only call it when needed:
+      (let ((color
+             (if buffer-read-only
+                 "#BBB"
+               (if overwrite-mode
+                   "#C00"
+                 "#FFF"))))
+        (unless (and
+                 (string= color my/set-cursor-color-color)
+                 (string= (buffer-name) my/set-cursor-color-buffer))
+          (set-cursor-color (setq my/set-cursor-color-color color))
+          (setq my/set-cursor-color-buffer (buffer-name)))))
+    (add-hook 'post-command-hook 'my/set-cursor-color-according-to-mode)
+    #+end_src
 ** Files
 *** Set a large =recentf= list, after startup
     #+BEGIN_SRC emacs-lisp :tangle yes
@@ -1451,13 +1469,6 @@
     (general-define-key
       :keymaps 'deadgrep-edit-mode-map
       "<escape>" 'deadgrep-mode)
-    #+END_SRC
-*** Display 'current match/total matches' in the mode-line in various search modes
-    #+BEGIN_SRC emacs-lisp :tangle yes
-    (use-package anzu
-      :delight
-      :defer
-      :hook (emacs-startup . global-anzu-mode))
     #+END_SRC
 *** Synonym injection
     #+BEGIN_SRC emacs-lisp :tangle yes

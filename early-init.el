@@ -56,6 +56,9 @@
 (setq frame-inhibit-implied-resize t)
 (setq initial-major-mode 'fundamental-mode)
 
+;; Improve the performance of rendering long lines.
+(setq-default bidi-display-reordering nil)
+
 (set-charset-priority 'unicode)
 (set-terminal-coding-system    'utf-8)  ; pretty
 (set-keyboard-coding-system    'utf-8)  ; pretty
